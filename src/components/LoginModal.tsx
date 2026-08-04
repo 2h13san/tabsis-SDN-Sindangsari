@@ -280,40 +280,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
             </form>
           )}
-
-          {/* Quick Demo Role Switcher */}
-          <div className="mt-6 pt-4 border-t border-slate-100">
-            <div className="flex items-center gap-1 text-2xs text-slate-400 font-bold mb-2">
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              <span>Simulasi Cepat Hak Akses (Demo Mode):</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handleQuickRoleSelect('admin')}
-                className="px-2.5 py-1.5 text-3xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors text-left"
-              >
-                1. Admin (Full Akses)
-              </button>
-              <button
-                onClick={() => handleQuickRoleSelect('bendahara')}
-                className="px-2.5 py-1.5 text-3xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors text-left"
-              >
-                2. Bendahara Sekolah
-              </button>
-              <button
-                onClick={() => handleQuickRoleSelect('guru')}
-                className="px-2.5 py-1.5 text-3xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors text-left"
-              >
-                3. Guru (Wali Kelas)
-              </button>
-              <button
-                onClick={() => handleQuickRoleSelect('orang_tua')}
-                className="px-2.5 py-1.5 text-3xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors text-left"
-              >
-                4. Orang Tua / Siswa
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 

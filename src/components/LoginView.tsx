@@ -322,44 +322,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
               </form>
             )}
-
-            {/* Quick Demo Switcher */}
-            <div className="mt-6 pt-4 border-t border-slate-100">
-              <div className="flex items-center gap-1.5 text-2xs text-slate-500 font-bold mb-2">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Simulasi Cepat Hak Akses Demo:</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleQuickRoleSelect('admin')}
-                  className="px-2.5 py-1.5 text-3xs font-bold bg-purple-50 text-purple-700 border border-purple-200 rounded-xl hover:bg-purple-100 transition-colors text-left flex items-center justify-between"
-                >
-                  <span>1. Admin</span>
-                  <span className="text-[9px] bg-purple-200/60 px-1 rounded">Full</span>
-                </button>
-                <button
-                  onClick={() => handleQuickRoleSelect('bendahara')}
-                  className="px-2.5 py-1.5 text-3xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-colors text-left flex items-center justify-between"
-                >
-                  <span>2. Bendahara</span>
-                  <span className="text-[9px] bg-emerald-200/60 px-1 rounded">Keuangan</span>
-                </button>
-                <button
-                  onClick={() => handleQuickRoleSelect('guru')}
-                  className="px-2.5 py-1.5 text-3xs font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-left flex items-center justify-between"
-                >
-                  <span>3. Guru</span>
-                  <span className="text-[9px] bg-blue-200/60 px-1 rounded">Wali</span>
-                </button>
-                <button
-                  onClick={() => handleQuickRoleSelect('orang_tua')}
-                  className="px-2.5 py-1.5 text-3xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors text-left flex items-center justify-between"
-                >
-                  <span>4. Siswa</span>
-                  <span className="text-[9px] bg-amber-200/60 px-1 rounded">Digital</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>

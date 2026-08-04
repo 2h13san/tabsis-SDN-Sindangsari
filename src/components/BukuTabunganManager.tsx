@@ -392,7 +392,7 @@ export const BukuTabunganManager: React.FC<BukuTabunganManagerProps> = ({
               </div>
 
               <div className="text-right">
-                <p>Jakarta, {formatDateIndo(new Date().toISOString().split('T')[0])}</p>
+                <p>Sindangsari, {formatDateIndo(new Date().toISOString().split('T')[0])}</p>
                 <p className="mt-1 font-bold">Bendahara Sekolah</p>
                 <div className="h-12"></div>
                 <p className="font-bold underline">{settings.bendahara}</p>
