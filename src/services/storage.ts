@@ -222,6 +222,7 @@ export const StorageService = {
     nominal: number;
     keterangan: string;
     petugas: string;
+    tanggal?: string;
   }): { success: boolean; message: string; transaction?: Transaksi } => {
     const siswaList = StorageService.getSiswa();
     const siswaIndex = siswaList.findIndex((s) => s.nis === data.nis || s.nisn === data.nis);
@@ -272,14 +273,15 @@ export const StorageService = {
 
     // Create Transaksi
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0].replace(/-/g, '');
+    const txDate = data.tanggal && data.tanggal.trim() !== '' ? data.tanggal : now.toISOString().split('T')[0];
+    const dateFormatted = txDate.replace(/-/g, '');
     const txList = StorageService.getTransaksi();
-    const countToday = txList.filter((t) => t.tanggal === now.toISOString().split('T')[0]).length + 1;
-    const txId = `TRX-${todayStr}-${String(countToday).padStart(3, '0')}`;
+    const countOnDate = txList.filter((t) => t.tanggal === txDate).length + 1;
+    const txId = `TRX-${dateFormatted}-${String(countOnDate).padStart(3, '0')}`;
 
     const newTx: Transaksi = {
       id: txId,
-      tanggal: now.toISOString().split('T')[0],
+      tanggal: txDate,
       jam: now.toTimeString().split(' ')[0],
       nis: targetSiswa.nis,
       nama: targetSiswa.nama,

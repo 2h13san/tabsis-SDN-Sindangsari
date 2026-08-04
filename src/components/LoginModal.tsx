@@ -31,8 +31,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   usersList: propUsersList,
 }) => {
   const [tab, setTab] = useState<'petugas' | 'orang_tua'>('petugas');
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [selectedSiswaId, setSelectedSiswaId] = useState<string>('');
   const [nisnInput, setNisnInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');

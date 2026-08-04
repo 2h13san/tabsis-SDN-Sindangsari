@@ -40,6 +40,7 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
 
   // Single Form State
   const [selectedNis, setSelectedNis] = useState('');
+  const [tanggalTx, setTanggalTx] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [jenis, setJenis] = useState<JenisTransaksi>(initialJenis);
   const [nominal, setNominal] = useState<number>(0);
   const [keterangan, setKeterangan] = useState('Setoran Tabungan Siswa');
@@ -65,6 +66,7 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
     }
     return classOptions[0] || '1-A';
   });
+  const [batchTanggal, setBatchTanggal] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [batchAmounts, setBatchAmounts] = useState<{ [nis: string]: number }>({});
   const [batchSuccessMsg, setBatchSuccessMsg] = useState('');
 
@@ -99,6 +101,7 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
       nominal,
       keterangan,
       petugas: activeUser.nama,
+      tanggal: tanggalTx,
     });
 
     if (res.success && res.transaction) {
@@ -129,6 +132,7 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
           nominal: amt,
           keterangan: `Setoran Kolektif Kelas ${selectedBatchKelas}`,
           petugas: activeUser.nama,
+          tanggal: batchTanggal,
         });
         countProcessed++;
         totalBatchAmount += amt;
@@ -247,6 +251,23 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Tanggal Penyetoran / Transaksi */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Tanggal Penyetoran / Transaksi
+                </label>
+                <input
+                  type="date"
+                  value={tanggalTx}
+                  onChange={(e) => setTanggalTx(e.target.value)}
+                  required
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-white font-bold text-slate-800"
+                />
+                <p className="text-3xs text-slate-500 mt-1">
+                  Otomatis terisi tanggal hari ini. Silakan ubah jika ingin menginput tanggal lain.
+                </p>
               </div>
 
               {/* Transaction Type Radio Selector */}
@@ -434,28 +455,40 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-700">Pilih Kelas:</span>
-              {isGuru && activeUser.kelas ? (
-                <div className="px-3 py-1.5 text-xs border border-amber-300 rounded-xl bg-amber-50 text-amber-950 font-extrabold">
-                  Kelas {activeUser.kelas} (Yang Diampu)
-                </div>
-              ) : (
-                <select
-                  value={selectedBatchKelas}
-                  onChange={(e) => {
-                    setSelectedBatchKelas(e.target.value);
-                    setBatchSuccessMsg('');
-                  }}
-                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-white font-bold cursor-pointer"
-                >
-                  {classOptions.map((k) => (
-                    <option key={k} value={k}>
-                      Kelas {k}
-                    </option>
-                  ))}
-                </select>
-              )}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-700">Tanggal:</span>
+                <input
+                  type="date"
+                  value={batchTanggal}
+                  onChange={(e) => setBatchTanggal(e.target.value)}
+                  required
+                  className="px-2.5 py-1.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-white font-bold cursor-pointer"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-700">Pilih Kelas:</span>
+                {isGuru && activeUser.kelas ? (
+                  <div className="px-3 py-1.5 text-xs border border-amber-300 rounded-xl bg-amber-50 text-amber-950 font-extrabold">
+                    Kelas {activeUser.kelas} (Yang Diampu)
+                  </div>
+                ) : (
+                  <select
+                    value={selectedBatchKelas}
+                    onChange={(e) => {
+                      setSelectedBatchKelas(e.target.value);
+                      setBatchSuccessMsg('');
+                    }}
+                    className="px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-white font-bold cursor-pointer"
+                  >
+                    {classOptions.map((k) => (
+                      <option key={k} value={k}>
+                        Kelas {k}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
 

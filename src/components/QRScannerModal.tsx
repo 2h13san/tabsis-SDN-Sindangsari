@@ -131,9 +131,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
       // Dynamic viewbox optimized for HP aspect ratios and 1D/2D barcodes
       const qrboxFunction = (viewfinderWidth: number, viewfinderHeight: number) => {
-        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-        const boxWidth = Math.min(viewfinderWidth * 0.85, 320);
-        const boxHeight = Math.min(viewfinderHeight * 0.65, 200);
+        const boxWidth = Math.min(viewfinderWidth * 0.88, 340);
+        const boxHeight = Math.min(viewfinderHeight * 0.60, 220);
         return {
           width: Math.max(180, Math.floor(boxWidth)),
           height: Math.max(120, Math.floor(boxHeight)),
@@ -141,7 +140,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       };
 
       const config = {
-        fps: 15,
+        fps: 20,
         qrbox: qrboxFunction,
         aspectRatio: 1.333333,
         experimentalFeatures: {
@@ -151,20 +150,32 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
       setIsScanning(true);
 
-      const cameraConstraint = selectedCameraId
-        ? selectedCameraId
+      // Prefer facingMode environment for HP smartphones
+      const cameraConstraint: any = selectedCameraId
+        ? { deviceId: { exact: selectedCameraId } }
         : { facingMode: 'environment' };
 
-      await html5Qrcode.start(
-        cameraConstraint,
-        config,
-        (decodedText) => {
-          handleDecodedResult(decodedText);
-        },
-        () => {
-          // ignore scan frame errors
-        }
-      );
+      try {
+        await html5Qrcode.start(
+          cameraConstraint,
+          config,
+          (decodedText) => {
+            handleDecodedResult(decodedText);
+          },
+          () => {}
+        );
+      } catch (firstErr) {
+        // Fallback to basic facingMode if exact deviceId failed
+        console.warn('First camera start failed, trying basic facingMode environment:', firstErr);
+        await html5Qrcode.start(
+          { facingMode: 'environment' },
+          config,
+          (decodedText) => {
+            handleDecodedResult(decodedText);
+          },
+          () => {}
+        );
+      }
 
       // Check if torch feature is available on HP camera
       try {
@@ -179,14 +190,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       console.warn('Camera scanner start error:', err);
       setIsScanning(false);
 
-      // Fallback attempt: if selected camera failed, try generic environment mode
-      if (selectedCameraId) {
-        setSelectedCameraId(null);
-        return;
-      }
-
       setCameraError(
-        'Kamera HP tidak dapat diakses atau izin diblokir browser. Anda bisa "Ambil Foto HP", "Upload File", atau "Ketik Manual".'
+        'Kamera live HP tidak dapat terbuka atau izin ditolak. Silakan tekan tombol "Foto Barcode via Kamera HP" di bawah atau buka lewat tab "Foto / File HP".'
       );
     }
   };
@@ -259,6 +264,24 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     if (!file) return;
 
     try {
+      // 1. Try native browser BarcodeDetector API if available (Android Chrome / Edge / Opera)
+      if ('BarcodeDetector' in window) {
+        try {
+          const detector = new (window as any).BarcodeDetector({
+            formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'codabar', 'itf'],
+          });
+          const imageBitmap = await createImageBitmap(file);
+          const detected = await detector.detect(imageBitmap);
+          if (detected && detected.length > 0) {
+            handleDecodedResult(detected[0].rawValue);
+            return;
+          }
+        } catch (nativeErr) {
+          console.warn('Native BarcodeDetector failed, falling back to html5Qrcode:', nativeErr);
+        }
+      }
+
+      // 2. Fallback to html5Qrcode scanFile
       const html5Qrcode = new Html5Qrcode('qr-reader-file-temp', {
         formatsToSupport: [
           Html5QrcodeSupportedFormats.QR_CODE,
@@ -268,6 +291,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           Html5QrcodeSupportedFormats.EAN_8,
           Html5QrcodeSupportedFormats.UPC_A,
           Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODABAR,
+          Html5QrcodeSupportedFormats.ITF,
         ],
         verbose: false,
       });
@@ -275,7 +300,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       handleDecodedResult(decodedText);
     } catch (err) {
       alert(
-        'Barcode / QR Code tidak terdeteksi pada gambar yang dipilih. Pastikan foto cukup terang, fokus, dan tidak kabur.'
+        'Barcode / QR Code tidak terdeteksi pada gambar. Pastikan foto kartu cukup terang, fokus, dan tegak.'
       );
     }
   };
@@ -413,12 +438,27 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 </div>
               )}
 
-              <div className="bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl text-left flex items-center gap-2">
-                <ScanLine className="w-4 h-4 text-emerald-600 shrink-0" />
-                <p className="text-3xs text-emerald-900 font-medium leading-tight">
-                  Mendukung <strong>Barcode Garis 1D</strong> (NIS/NISN) dan <strong>QR Code 2D</strong>. Posisikan tegak lurus di tengah layar.
-                </p>
+              <div className="bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl text-left flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ScanLine className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <p className="text-3xs text-emerald-900 font-medium leading-tight">
+                    Mendukung <strong>Barcode Garis 1D</strong> (NIS/NISN) & <strong>QR Code 2D</strong>.
+                  </p>
+                </div>
               </div>
+
+              {/* Direct HP Camera Snap Action for Blurry/Difficult HP Cameras */}
+              <label className="w-full min-h-[44px] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all">
+                <Camera className="w-4 h-4 text-emerald-200" />
+                <span>Atau Ambil Foto Barcode (Kamera HP)</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
             </div>
           )}
 

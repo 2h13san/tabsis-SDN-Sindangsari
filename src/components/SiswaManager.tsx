@@ -74,6 +74,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
   const [formTelepon, setFormTelepon] = useState('');
   const [formSaldoAwal, setFormSaldoAwal] = useState<number>(0);
   const [formStatus, setFormStatus] = useState<'Aktif' | 'Lulus' | 'Pindah'>('Aktif');
+  const [formTanggalDaftar, setFormTanggalDaftar] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
   const canEdit = activeUser.role === 'admin' || activeUser.role === 'bendahara';
 
@@ -106,6 +107,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
     setFormTelepon('081234567890');
     setFormSaldoAwal(0);
     setFormStatus('Aktif');
+    setFormTanggalDaftar(new Date().toISOString().split('T')[0]);
     setShowAddModal(true);
   };
 
@@ -120,6 +122,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
     setFormTelepon(siswa.telepon);
     setFormSaldoAwal(siswa.saldo);
     setFormStatus(siswa.status);
+    setFormTanggalDaftar(siswa.tanggal_daftar || new Date().toISOString().split('T')[0]);
     setShowAddModal(true);
   };
 
@@ -144,6 +147,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
               telepon: formTelepon,
               saldo: formSaldoAwal,
               status: formStatus,
+              tanggal_daftar: formTanggalDaftar,
             }
           : s
       );
@@ -162,7 +166,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
         telepon: formTelepon,
         saldo: formSaldoAwal,
         status: formStatus,
-        tanggal_daftar: new Date().toISOString().split('T')[0],
+        tanggal_daftar: formTanggalDaftar || new Date().toISOString().split('T')[0],
       };
       StorageService.saveSiswa([...siswaList, newSiswaObj]);
       StorageService.addLog(activeUser.nama, `Menambahkan siswa baru ${formNama} (Kelas ${formKelas})`);
@@ -491,6 +495,17 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
                     <option value="Pindah">Pindah Sekolah</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Tanggal Pendaftaran / Masuk</label>
+                <input
+                  type="date"
+                  value={formTanggalDaftar}
+                  onChange={(e) => setFormTanggalDaftar(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 font-bold bg-white"
+                />
               </div>
 
               <div className="flex gap-2 pt-2">
