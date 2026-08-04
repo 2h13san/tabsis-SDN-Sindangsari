@@ -1,0 +1,118 @@
+{
+  "entities": {
+    "settings": {
+      "title": "settings",
+      "description": "Application configurations and school settings",
+      "type": "object",
+      "properties": {
+        "nama_sekolah": { "type": "string" },
+        "npsn": { "type": "string" },
+        "alamat": { "type": "string" },
+        "kepala_sekolah": { "type": "string" },
+        "nip_kepala_sekolah": { "type": "string" },
+        "bendahara": { "type": "string" },
+        "nip_bendahara": { "type": "string" },
+        "tahun_ajaran": { "type": "string" },
+        "logo_url": { "type": "string" },
+        "saldo_bank": { "type": "number" }
+      },
+      "required": ["nama_sekolah", "npsn", "tahun_ajaran"]
+    },
+    "users": {
+      "title": "users",
+      "description": "User accounts for admin, bendahara, guru",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "nama": { "type": "string" },
+        "role": { "type": "string" },
+        "kelas": { "type": "string" },
+        "status": { "type": "string" },
+        "last_login": { "type": "string" }
+      },
+      "required": ["id", "username", "nama", "role"]
+    },
+    "siswa": {
+      "title": "siswa",
+      "description": "Students registered in savings system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nis": { "type": "string" },
+        "nisn": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelas": { "type": "string" },
+        "jenis_kelamin": { "type": "string" },
+        "nama_orang_tua": { "type": "string" },
+        "no_telepon": { "type": "string" },
+        "saldo": { "type": "number" },
+        "status": { "type": "string" },
+        "wali_kelas": { "type": "string" },
+        "no_rekening": { "type": "string" }
+      },
+      "required": ["id", "nis", "nama", "kelas", "saldo"]
+    },
+    "transaksi": {
+      "title": "transaksi",
+      "description": "Savings deposits and withdrawal transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "nis": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelas": { "type": "string" },
+        "jenis": { "type": "string" },
+        "setoran": { "type": "number" },
+        "penarikan": { "type": "number" },
+        "saldo": { "type": "number" },
+        "petugas": { "type": "string" },
+        "keterangan": { "type": "string" },
+        "is_bank_deposited": { "type": "boolean" },
+        "bukti_transfer_url": { "type": "string" }
+      },
+      "required": ["id", "tanggal", "nis", "nama", "jenis"]
+    },
+    "kelas": {
+      "title": "kelas",
+      "description": "School classes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nama_kelas": { "type": "string" },
+        "wali_kelas": { "type": "string" }
+      },
+      "required": ["id", "nama_kelas"]
+    },
+    "logs": {
+      "title": "logs",
+      "description": "Activity logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "user": { "type": "string" },
+        "role": { "type": "string" },
+        "aktivitas": { "type": "string" },
+        "detail": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "user", "aktivitas"]
+    },
+    "backups": {
+      "title": "backups",
+      "description": "Database backup logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "tipe": { "type": "string" },
+        "oleh": { "type": "string" },
+        "jumlah_record": { "type": "number" },
+        "keterangan": { "type": "string" }
+      },
+      "required": ["id", "tanggal", "tipe"]
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Remix Tabungan Siswa Digital (TABSIS) ori on ichsan85",
+  "description": "Aplikasi Tabungan Siswa Digital berbasis Google Apps Script \u0026 Google Spreadsheet untuk Sekolah Dasar.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
