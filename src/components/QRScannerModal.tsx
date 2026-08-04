@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
-import { QrCode, X, Camera, Upload, AlertCircle, RefreshCw, Keyboard } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { QrCode, X, Camera, Upload, AlertCircle, RefreshCw, Keyboard, SwitchCamera, Zap, ScanLine, Image as ImageIcon } from 'lucide-react';
 import { Siswa } from '../types';
 
 interface QRScannerModalProps {
@@ -12,37 +12,73 @@ interface QRScannerModalProps {
   subtitle?: string;
 }
 
+interface CameraDevice {
+  id: string;
+  label: string;
+}
+
 export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   isOpen,
   onClose,
   onScanSuccess,
   siswaList = [],
-  title = 'Scan QR Code Kartu Siswa',
-  subtitle = 'Arahkan kamera ke QR Code kartu siswa atau unggah gambar QR Code',
+  title = 'Scan Barcode / QR Code Kartu Siswa',
+  subtitle = 'Arahkan kamera HP ke Barcode/QR Code kartu siswa atau ambil foto langsung',
 }) => {
   const [activeTab, setActiveTab] = useState<'camera' | 'upload' | 'manual'>('camera');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
+  const [cameras, setCameras] = useState<CameraDevice[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  const [hasTorch, setHasTorch] = useState(false);
+  
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const qrContainerId = 'qr-reader-viewport';
 
   useEffect(() => {
-    if (!isOpen || activeTab !== 'camera') {
+    if (!isOpen) {
       stopCameraScanner();
       return;
     }
 
-    // Small delay to ensure DOM element exists
-    const timer = setTimeout(() => {
-      startCameraScanner();
-    }, 200);
+    // Load camera list on open
+    Html5Qrcode.getCameras()
+      .then((devices) => {
+        if (devices && devices.length > 0) {
+          const mapped = devices.map((d) => ({ id: d.id, label: d.label || `Kamera ${d.id}` }));
+          setCameras(mapped);
+          // Prefer back camera if label includes back/rear/environment
+          const backCam = mapped.find(
+            (c) =>
+              c.label.toLowerCase().includes('back') ||
+              c.label.toLowerCase().includes('rear') ||
+              c.label.toLowerCase().includes('belakang') ||
+              c.label.toLowerCase().includes('environment')
+          );
+          if (backCam) {
+            setSelectedCameraId(backCam.id);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not enumerate cameras:', err);
+      });
 
-    return () => {
-      clearTimeout(timer);
+    if (activeTab === 'camera') {
+      const timer = setTimeout(() => {
+        startCameraScanner();
+      }, 250);
+
+      return () => {
+        clearTimeout(timer);
+        stopCameraScanner();
+      };
+    } else {
       stopCameraScanner();
-    };
-  }, [isOpen, activeTab]);
+    }
+  }, [isOpen, activeTab, selectedCameraId]);
 
   const stopCameraScanner = async () => {
     if (scannerRef.current) {
@@ -56,6 +92,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       } finally {
         scannerRef.current = null;
         setIsScanning(false);
+        setTorchOn(false);
+        setHasTorch(false);
       }
     }
   };
@@ -73,14 +111,52 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         await stopCameraScanner();
       }
 
-      const html5Qrcode = new Html5Qrcode(qrContainerId);
+      // Support all standard 1D barcodes and 2D QR codes
+      const html5Qrcode = new Html5Qrcode(qrContainerId, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODABAR,
+          Html5QrcodeSupportedFormats.ITF,
+        ],
+        verbose: false,
+      });
+
       scannerRef.current = html5Qrcode;
 
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      // Dynamic viewbox optimized for HP aspect ratios and 1D/2D barcodes
+      const qrboxFunction = (viewfinderWidth: number, viewfinderHeight: number) => {
+        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+        const boxWidth = Math.min(viewfinderWidth * 0.85, 320);
+        const boxHeight = Math.min(viewfinderHeight * 0.65, 200);
+        return {
+          width: Math.max(180, Math.floor(boxWidth)),
+          height: Math.max(120, Math.floor(boxHeight)),
+        };
+      };
+
+      const config = {
+        fps: 15,
+        qrbox: qrboxFunction,
+        aspectRatio: 1.333333,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true,
+        },
+      };
 
       setIsScanning(true);
+
+      const cameraConstraint = selectedCameraId
+        ? selectedCameraId
+        : { facingMode: 'environment' };
+
       await html5Qrcode.start(
-        { facingMode: 'environment' },
+        cameraConstraint,
         config,
         (decodedText) => {
           handleDecodedResult(decodedText);
@@ -89,29 +165,67 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           // ignore scan frame errors
         }
       );
+
+      // Check if torch feature is available on HP camera
+      try {
+        const capabilities = html5Qrcode.getRunningTrackCapabilities();
+        if (capabilities && (capabilities as any).torch) {
+          setHasTorch(true);
+        }
+      } catch {
+        setHasTorch(false);
+      }
     } catch (err: any) {
       console.warn('Camera scanner start error:', err);
       setIsScanning(false);
+
+      // Fallback attempt: if selected camera failed, try generic environment mode
+      if (selectedCameraId) {
+        setSelectedCameraId(null);
+        return;
+      }
+
       setCameraError(
-        'Kamera tidak dapat diakses atau izin ditolak. Anda dapat memilih tab "Upload Gambar" atau "Ketik Manual".'
+        'Kamera HP tidak dapat diakses atau izin diblokir browser. Anda bisa "Ambil Foto HP", "Upload File", atau "Ketik Manual".'
       );
     }
   };
 
+  const toggleTorch = async () => {
+    if (!scannerRef.current || !hasTorch) return;
+    try {
+      const nextState = !torchOn;
+      await scannerRef.current.applyVideoConstraints({
+        advanced: [{ torch: nextState } as any],
+      });
+      setTorchOn(nextState);
+    } catch (err) {
+      console.warn('Torch toggle error:', err);
+    }
+  };
+
+  const switchNextCamera = () => {
+    if (cameras.length <= 1) return;
+    const currentIndex = cameras.findIndex((c) => c.id === selectedCameraId);
+    const nextIndex = (currentIndex + 1) % cameras.length;
+    setSelectedCameraId(cameras[nextIndex].id);
+  };
+
   const handleDecodedResult = (rawText: string) => {
     let cleanText = rawText.trim();
+    
     // Try to parse JSON if formatted as JSON
     try {
       if (cleanText.startsWith('{') && cleanText.endsWith('}')) {
         const obj = JSON.parse(cleanText);
-        cleanText = obj.nis || obj.nisn || obj.id || cleanText;
+        cleanText = obj.nis || obj.nisn || obj.id || obj.code || cleanText;
       }
     } catch {
       // ignore
     }
 
-    // Remove prefixes like "NIS:" or "NISN:"
-    cleanText = cleanText.replace(/^(nis|nisn):/i, '').trim();
+    // Remove prefixes like "NIS:", "NISN:", "BARCODE:"
+    cleanText = cleanText.replace(/^(nis|nisn|barcode|code):/i, '').trim();
 
     // Find student if siswaList is provided (match custom qr_code, nis, nisn, or id)
     const foundSiswa = siswaList.find(
@@ -121,6 +235,15 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         s.nisn === cleanText ||
         s.id === cleanText
     );
+
+    // Vibration feedback on smartphones
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate(100);
+      } catch {
+        // ignore
+      }
+    }
 
     stopCameraScanner();
     onScanSuccess({
@@ -136,11 +259,24 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     if (!file) return;
 
     try {
-      const html5Qrcode = new Html5Qrcode('qr-reader-file-temp');
+      const html5Qrcode = new Html5Qrcode('qr-reader-file-temp', {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+        ],
+        verbose: false,
+      });
       const decodedText = await html5Qrcode.scanFile(file, true);
       handleDecodedResult(decodedText);
     } catch (err) {
-      alert('QR Code tidak terdeteksi pada gambar yang diunggah. Silakan coba gambar dengan resolusi lebih baik.');
+      alert(
+        'Barcode / QR Code tidak terdeteksi pada gambar yang dipilih. Pastikan foto cukup terang, fokus, dan tidak kabur.'
+      );
     }
   };
 
@@ -153,14 +289,16 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-100 overflow-hidden my-auto">
         {/* Header */}
         <div className="bg-slate-900 p-4 text-white flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-emerald-400" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+              <QrCode className="w-4 h-4" />
+            </div>
             <div>
-              <h3 className="text-sm font-bold">{title}</h3>
+              <h3 className="text-sm font-bold text-white">{title}</h3>
               <p className="text-3xs text-slate-300">{subtitle}</p>
             </div>
           </div>
@@ -169,87 +307,160 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
               stopCameraScanner();
               onClose();
             }}
-            className="p-1 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer text-slate-400 hover:text-white"
+            className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors cursor-pointer text-slate-400 hover:text-white"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex border-b border-slate-200 bg-slate-50 p-1">
+        {/* Tab Switcher (Mobile Friendly 44px height) */}
+        <div className="flex border-b border-slate-200 bg-slate-100 p-1 gap-1">
           <button
             type="button"
             onClick={() => setActiveTab('camera')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'camera' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600'
+            className={`flex-1 min-h-[44px] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'camera' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Camera className="w-3.5 h-3.5" />
+            <Camera className="w-4 h-4" />
             <span>Kamera Live</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('upload')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'upload' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600'
+            className={`flex-1 min-h-[44px] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'upload' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Upload File</span>
+            <ImageIcon className="w-4 h-4" />
+            <span>Foto / File HP</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('manual')}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'manual' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600'
+            className={`flex-1 min-h-[44px] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'manual' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Keyboard className="w-3.5 h-3.5" />
-            <span>Input / USB</span>
+            <Keyboard className="w-4 h-4" />
+            <span>Input USB</span>
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-5">
+        <div className="p-4 sm:p-5">
           {activeTab === 'camera' && (
-            <div className="space-y-4 text-center">
+            <div className="space-y-3 text-center">
+              {/* Camera Viewport */}
               <div
                 id={qrContainerId}
-                className="w-full h-64 bg-slate-900 rounded-xl overflow-hidden relative flex items-center justify-center border border-slate-300 shadow-inner"
+                className="w-full h-64 sm:h-72 bg-slate-950 rounded-2xl overflow-hidden relative flex items-center justify-center border border-slate-800 shadow-inner"
               >
                 {!isScanning && !cameraError && (
-                  <div className="text-white text-xs flex flex-col items-center gap-2">
-                    <RefreshCw className="w-6 h-6 animate-spin text-emerald-400" />
-                    <span>Membuka kamera...</span>
+                  <div className="text-white text-xs flex flex-col items-center gap-2 p-4">
+                    <RefreshCw className="w-7 h-7 animate-spin text-emerald-400" />
+                    <span className="font-medium">Membuka kamera HP...</span>
+                    <span className="text-3xs text-slate-400">Pastikan memberi izin akses kamera</span>
                   </div>
                 )}
               </div>
 
+              {/* Camera Toolbar Actions (Torch & Switch Camera) */}
+              <div className="flex items-center justify-between gap-2 pt-1">
+                {cameras.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={switchNextCamera}
+                    className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <SwitchCamera className="w-4 h-4 text-emerald-600" />
+                    <span>Ganti Kamera HP</span>
+                  </button>
+                ) : (
+                  <div className="text-3xs text-slate-400 font-medium">Mode Kamera Aktif</div>
+                )}
+
+                {hasTorch && (
+                  <button
+                    type="button"
+                    onClick={toggleTorch}
+                    className={`py-2 px-3 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                      torchOn
+                        ? 'bg-amber-500 text-white shadow-2xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span>{torchOn ? 'Senter ON' : 'Senter HP'}</span>
+                  </button>
+                )}
+              </div>
+
               {cameraError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-start gap-2 text-left">
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-start gap-2.5 text-left">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold block">Akses Kamera Terkendala</span>
-                    <span>{cameraError}</span>
+                  <div className="space-y-1">
+                    <span className="font-bold block text-rose-900">Kamera HP Terkendala</span>
+                    <p className="text-3xs text-rose-700 leading-relaxed">{cameraError}</p>
+                    <button
+                      type="button"
+                      onClick={startCameraScanner}
+                      className="mt-1.5 px-3 py-1 bg-rose-600 text-white font-bold text-3xs rounded-lg hover:bg-rose-700 cursor-pointer"
+                    >
+                      Coba Buka Kamera Lagi
+                    </button>
                   </div>
                 </div>
               )}
 
-              <p className="text-3xs text-slate-500">
-                Pegang kartu QR Code siswa secara stabil tepat di tengah kotak merah/hijau kamera.
-              </p>
+              <div className="bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl text-left flex items-center gap-2">
+                <ScanLine className="w-4 h-4 text-emerald-600 shrink-0" />
+                <p className="text-3xs text-emerald-900 font-medium leading-tight">
+                  Mendukung <strong>Barcode Garis 1D</strong> (NIS/NISN) dan <strong>QR Code 2D</strong>. Posisikan tegak lurus di tengah layar.
+                </p>
+              </div>
             </div>
           )}
 
           {activeTab === 'upload' && (
-            <div className="space-y-4 text-center py-4">
+            <div className="space-y-3 py-2">
               <div id="qr-reader-file-temp" className="hidden"></div>
-              <label className="border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/50 p-8 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-colors group">
-                <Upload className="w-10 h-10 text-slate-400 group-hover:text-emerald-600 mb-2 transition-colors" />
-                <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-800">
-                  Pilih Gambar QR Code Siswa
-                </span>
-                <span className="text-3xs text-slate-400 mt-1">Format PNG, JPG, JPEG, WEBP</span>
+              
+              {/* Option 1: Direct Camera Capture on HP */}
+              <label className="border-2 border-emerald-300 hover:border-emerald-500 bg-emerald-50/60 hover:bg-emerald-100/60 p-5 rounded-2xl flex items-center gap-3 cursor-pointer transition-all group">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Camera className="w-5 h-5" />
+                </div>
+                <div className="text-left flex-1">
+                  <span className="text-xs font-bold text-emerald-950 block">
+                    Ambil Foto Langsung dengan Kamera HP
+                  </span>
+                  <span className="text-3xs text-emerald-700 font-medium block mt-0.5">
+                    Membuka aplikasi kamera bawaan HP untuk foto kartu siswa
+                  </span>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+
+              {/* Option 2: Choose from Gallery / Storage */}
+              <label className="border-2 border-dashed border-slate-300 hover:border-slate-400 bg-slate-50 hover:bg-slate-100 p-5 rounded-2xl flex items-center gap-3 cursor-pointer transition-all group">
+                <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div className="text-left flex-1">
+                  <span className="text-xs font-bold text-slate-800 block">
+                    Pilih Foto / File dari Galeri HP
+                  </span>
+                  <span className="text-3xs text-slate-500 font-medium block mt-0.5">
+                    Pilih gambar yang tersimpan (Format PNG, JPG, WEBP)
+                  </span>
+                </div>
                 <input
                   type="file"
                   accept="image/*"
@@ -261,10 +472,10 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           )}
 
           {activeTab === 'manual' && (
-            <form onSubmit={handleManualSubmit} className="space-y-4">
+            <form onSubmit={handleManualSubmit} className="space-y-4 py-1">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Nomor QR Code / USB Barcode Scanner Input
+                  Nomor NIS / NISN / USB Barcode Scanner
                 </label>
                 <input
                   type="text"
@@ -275,14 +486,14 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                   className="w-full px-4 py-3 text-sm font-bold border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
                 <p className="text-3xs text-slate-500 mt-1">
-                  Mendukung alat USB Barcode/QR Scanner fisik yang terhubung ke komputer/laptop.
+                  Dapat digunakan jika kamera HP berhalangan atau menggunakan barcode scanner USB fisik.
                 </p>
               </div>
               <button
                 type="submit"
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
+                className="w-full min-h-[44px] py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer transition-colors"
               >
-                Gunakan Data Tersebut
+                Gunakan Kode Tersebut
               </button>
             </form>
           )}
@@ -291,3 +502,4 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     </div>
   );
 };
+
