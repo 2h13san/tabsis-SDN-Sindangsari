@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Transaksi, User, AppSettings, Kelas, PenyerahanSetoranRecord } from '../types';
 import { formatRupiah, formatDateIndo, StorageService } from '../services/storage';
 import { FirestoreService } from '../services/firestoreService';
+import { BankPortalView } from './BankPortalView';
 import {
   GitMerge,
   ArrowRight,
@@ -37,11 +38,23 @@ export const AlurSetoranManager: React.FC<AlurSetoranManagerProps> = ({
   settings,
   onRefreshData,
 }) => {
+  // Early return for Bank Partner Role
+  if (activeUser.role === 'admin_bank') {
+    return (
+      <BankPortalView
+        settings={settings}
+        activeUser={activeUser}
+        transaksiList={transaksiList}
+        onRefreshData={onRefreshData}
+      />
+    );
+  }
+
   const isGuru = activeUser.role === 'guru';
   const isWaliKelasUser = activeUser.role === 'wali_kelas' || Boolean(activeUser.kelas);
   const userAssignedClass = activeUser.kelas || (kelasList[0]?.nama_kelas || '1A');
 
-  const [activeTab, setActiveTab] = useState<'wali_kelas' | 'bendahara' | 'bank' | 'riwayat'>('wali_kelas');
+  const [activeTab, setActiveTab] = useState<'wali_kelas' | 'bendahara' | 'menunggu_bank' | 'bank' | 'riwayat'>('wali_kelas');
   const [selectedKelasFilter, setSelectedKelasFilter] = useState<string>(
     isWaliKelasUser && activeUser.kelas ? activeUser.kelas : 'ALL'
   );
@@ -74,6 +87,9 @@ export const AlurSetoranManager: React.FC<AlurSetoranManagerProps> = ({
 
   // Tier 2: At Bendahara
   const txDiBendahara = setoranList.filter((t) => t.status_alur === 'Disetor ke Bendahara');
+
+  // Tier 2.5: Menunggu Approval Bank
+  const txMenungguBank = setoranList.filter((t) => t.status_alur === 'Menunggu Approval Bank' || t.status_bank === 'Menunggu Approval Bank');
 
   // Tier 3: At Bank
   const txDiBank = setoranList.filter((t) => t.status_alur === 'Disetor ke Bank');
@@ -292,6 +308,21 @@ export const AlurSetoranManager: React.FC<AlurSetoranManagerProps> = ({
           {!isGuru && (
             <button
               onClick={() => {
+                setActiveTab('menunggu_bank');
+                setSelectedTxIds([]);
+              }}
+              className={`px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-2 ${
+                activeTab === 'menunggu_bank' ? 'bg-amber-100 text-amber-950 shadow-2xs font-extrabold border border-amber-300' : 'text-slate-600'
+              }`}
+            >
+              <Clock className="w-4 h-4 text-amber-600" />
+              <span>2.5 Menunggu Approval Bank ({txMenungguBank.length})</span>
+            </button>
+          )}
+
+          {!isGuru && (
+            <button
+              onClick={() => {
                 setActiveTab('bank');
                 setSelectedTxIds([]);
               }}
@@ -300,7 +331,7 @@ export const AlurSetoranManager: React.FC<AlurSetoranManagerProps> = ({
               }`}
             >
               <Landmark className="w-4 h-4 text-emerald-600" />
-              <span>3. Sudah Disetor ke Bank ({txDiBank.length})</span>
+              <span>3. Terbuku di Bank ({txDiBank.length})</span>
             </button>
           )}
 
@@ -821,10 +852,72 @@ export const AlurSetoranManager: React.FC<AlurSetoranManagerProps> = ({
                   className="px-6 py-2.5 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap"
                 >
                   <Landmark className="w-4 h-4 text-amber-300" />
-                  <span>Setor Kolektif Ke Bank Mitra</span>
+                  <span>Ajukan Setoran Ke Bank (Proses Approval)</span>
                 </button>
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {/* TIER 2.5: MENUNGGU APPROVAL BANK */}
+      {activeTab === 'menunggu_bank' && (
+        <div className="bg-white rounded-2xl border border-amber-200 shadow-2xs p-6 space-y-6">
+          <div className="border-b border-amber-100 pb-4">
+            <h3 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-amber-600" />
+              <span>Status: Pengajuan Setoran Menunggu Approval Admin Bank Mitra</span>
+            </h3>
+            <p className="text-xs text-slate-500">
+              Daftar transaksi yang telah diajukan Bendahara dan saat ini sedang menunggu konfirmasi/persetujuan penerimaan dana fisik dari pihak Admin Bank Mitra.
+            </p>
+          </div>
+
+          {txMenungguBank.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-xs font-medium">
+              Tidak ada transaksi setoran yang sedang menunggu approval Bank saat ini.
+            </div>
+          ) : (
+            <div className="overflow-x-auto border border-amber-200 rounded-2xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-amber-50 text-amber-950 font-bold border-b border-amber-200">
+                    <th className="p-3">No</th>
+                    <th className="p-3">Tanggal Pengajuan</th>
+                    <th className="p-3">Siswa & Kelas</th>
+                    <th className="p-3">Petugas Bendahara</th>
+                    <th className="p-3">Keterangan</th>
+                    <th className="p-3 text-right">Nominal Setoran</th>
+                    <th className="p-3 text-center">Status Approval</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100 font-medium">
+                  {txMenungguBank.map((t, idx) => (
+                    <tr key={t.id} className="hover:bg-amber-50/50">
+                      <td className="p-3 text-slate-400 font-semibold">{idx + 1}</td>
+                      <td className="p-3 font-mono font-bold text-slate-700">
+                        {formatDateIndo(t.tanggal_setor_bank || t.tanggal)}
+                      </td>
+                      <td className="p-3">
+                        <div className="font-bold text-slate-900">{t.nama}</div>
+                        <div className="text-3xs text-slate-500 font-mono">
+                          Kelas {t.kelas} • NIS: {t.nis}
+                        </div>
+                      </td>
+                      <td className="p-3 font-bold text-slate-800">{t.petugas_bendahara || settings.bendahara}</td>
+                      <td className="p-3 text-slate-700">{t.keterangan}</td>
+                      <td className="p-3 text-right font-black text-amber-900">{formatRupiah(t.setoran)}</td>
+                      <td className="p-3 text-center">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-3xs font-black uppercase tracking-wider">
+                          <Clock className="w-3 h-3 text-amber-700 animate-pulse" />
+                          <span>Menunggu Approval Bank</span>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

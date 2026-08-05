@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Siswa, Transaksi, AppSettings, PrintablePassbookConfig, User } from '../types';
-import { formatRupiah, formatDateIndo, StorageService } from '../services/storage';
+import { formatRupiah, formatDateIndo, StorageService, isSameKelas } from '../services/storage';
 import { QRCodeDisplayModal } from './QRCodeDisplayModal';
 import { QRScannerModal } from './QRScannerModal';
+import { SearchableSiswaSelect } from './SearchableSiswaSelect';
 import {
   BookOpenCheck,
   Printer,
@@ -44,7 +45,7 @@ export const BukuTabunganManager: React.FC<BukuTabunganManagerProps> = ({
 
   // Filter student list according to user role (Guru gets only their assigned class)
   const availableSiswaList = siswaList.filter((s) => {
-    if (isGuru && activeUser?.kelas && s.kelas !== activeUser.kelas) return false;
+    if (isGuru && activeUser?.kelas && !isSameKelas(s.kelas, activeUser.kelas)) return false;
     if (activeUser?.role === 'orang_tua' && currentStudent && s.nis !== currentStudent.nis) return false;
     return true;
   });
@@ -150,23 +151,17 @@ export const BukuTabunganManager: React.FC<BukuTabunganManagerProps> = ({
       {/* Student Selection Toolbar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4 no-print">
         <div className="flex-1 w-full flex items-center gap-2">
-          <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <span className="text-xs font-bold text-slate-700 shrink-0">Pilih Siswa:</span>
-          <select
-            value={selectedNis}
-            onChange={(e) => setSelectedNis(e.target.value)}
-            className="w-full px-3 py-2 text-xs font-bold border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-white"
-          >
-            {availableSiswaList.map((s) => (
-              <option key={s.id} value={s.nis}>
-                {s.nis} - {s.nama} ({s.kelas}) - Saldo: Rp {s.saldo.toLocaleString('id-ID')}
-              </option>
-            ))}
-          </select>
+          <SearchableSiswaSelect
+            siswaList={availableSiswaList}
+            selectedNis={selectedNis}
+            onSelectSiswa={(nis) => setSelectedNis(nis)}
+            className="flex-1"
+          />
           <button
             type="button"
             onClick={() => setIsScannerOpen(true)}
-            className="px-3 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-2xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+            className="px-3 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-2xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
           >
             <QrCode className="w-3.5 h-3.5 text-amber-300" />
             <span>Scan QR</span>

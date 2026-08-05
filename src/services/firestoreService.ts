@@ -7,9 +7,7 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
-  query,
-  orderBy,
-  limit,
+  getDocFromServer,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
@@ -47,9 +45,18 @@ export const COLLECTIONS = {
 };
 
 export const FirestoreService = {
-  // Initialize and Seed Default Data if empty
+  // Test connection & Initialize Default Data if empty
   initDatabase: async () => {
     try {
+      // Test server reachability
+      try {
+        await getDocFromServer(doc(db, '_healthcheck_', 'ping'));
+      } catch (connErr: any) {
+        if (connErr?.message?.includes('offline') || connErr?.code === 'unavailable') {
+          console.warn('Firestore is currently in offline mode:', connErr.message);
+        }
+      }
+
       // 1. Settings
       const settingsDocRef = doc(db, COLLECTIONS.SETTINGS, 'app');
       const settingsSnap = await getDoc(settingsDocRef);
@@ -80,52 +87,9 @@ export const FirestoreService = {
         }
       }
 
-      // 5. Purge sample documents if present
-      const sampleSiswaIds = ['SIS-001', 'SIS-002', 'SIS-003', 'SIS-004', 'SIS-005', 'SIS-006', 'SIS-007', 'SIS-008'];
-      for (const id of sampleSiswaIds) {
-        try {
-          await deleteDoc(doc(db, COLLECTIONS.SISWA, id));
-        } catch {
-          // ignore if already deleted
-        }
-      }
-
-      const sampleTxIds = [
-        'TRX-20260801-001',
-        'TRX-20260801-002',
-        'TRX-20260802-001',
-        'TRX-20260802-002',
-        'TRX-20260803-001',
-        'TRX-20260803-002',
-        'TRX-20260803-003',
-        'TRX-20260803-004',
-      ];
-      for (const id of sampleTxIds) {
-        try {
-          await deleteDoc(doc(db, COLLECTIONS.TRANSAKSI, id));
-        } catch {
-          // ignore
-        }
-      }
-
-      const sampleLogIds = ['LOG-001', 'LOG-002', 'LOG-003'];
-      for (const id of sampleLogIds) {
-        try {
-          await deleteDoc(doc(db, COLLECTIONS.LOGS, id));
-        } catch {
-          // ignore
-        }
-      }
-
-      try {
-        await deleteDoc(doc(db, COLLECTIONS.BACKUPS, 'BAK-20260801'));
-      } catch {
-        // ignore
-      }
-
       console.log('Firebase Firestore Database initialized successfully!');
     } catch (e) {
-      console.error('Firestore initDatabase error:', e);
+      console.warn('Firestore initDatabase operate offline / fallback:', e);
     }
   },
 
@@ -408,8 +372,9 @@ export const FirestoreService = {
         transaction: newTx,
       };
     } catch (e: any) {
-      console.error('Error processing transaction on Firestore:', e);
-      return { success: false, message: `Gagal memproses transaksi: ${e.message || e}` };
+      console.warn('Firestore offline/error, falling back to Local Storage:', e);
+      // Fallback seamlessly to local storage engine
+      return StorageService.processTransaction(data);
     }
   },
 
@@ -442,11 +407,11 @@ export const FirestoreService = {
 
       return {
         success: true,
-        message: `Berhasil menyetor Rp ${amount.toLocaleString('id-ID')} ke Bank via Firestore! (${countUpdated} transaksi diperbarui).`,
+        message: `Berhasil menyetor Rp ${amount.toLocaleString('id-ID')} ke Bank! (${countUpdated} transaksi diperbarui).`,
       };
     } catch (e: any) {
-      console.error('Error setorkebank firestore:', e);
-      return { success: false, message: `Gagal menyetor ke bank: ${e.message || e}` };
+      console.warn('Firestore setorkebank error, fallback to StorageService:', e);
+      return StorageService.setorKeBank(amount, petugas);
     }
   },
 
@@ -523,18 +488,63 @@ export const FirestoreService = {
         const snap = await getDoc(txRef);
         if (snap.exists()) {
           await updateDoc(txRef, {
-            status_alur: 'Disetor ke Bank',
-            status_bank: 'Disetor ke Bank',
+            status_alur: 'Menunggu Approval Bank',
+            status_bank: 'Menunggu Approval Bank',
             tanggal_setor_bank: todayStr,
-            petugas_bank: petugasBendahara,
+            petugas_bendahara: petugasBendahara,
           });
         }
       }
 
-      return StorageService.setorKasKeBankBerjenjang(txIds, petugasBendahara);
+      return StorageService.ajukanSetorKasKeBankBerjenjang(txIds, petugasBendahara);
     } catch (e) {
       console.error('Firestore setorKasKeBankBerjenjang fallback to StorageService:', e);
-      return StorageService.setorKasKeBankBerjenjang(txIds, petugasBendahara);
+      return StorageService.ajukanSetorKasKeBankBerjenjang(txIds, petugasBendahara);
+    }
+  },
+
+  approveSetoranBank: async (txIds: string[], petugasBank: string, noRef?: string) => {
+    try {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+
+      for (const txId of txIds) {
+        const txRef = doc(db, COLLECTIONS.TRANSAKSI, txId);
+        const snap = await getDoc(txRef);
+        if (snap.exists()) {
+          await updateDoc(txRef, {
+            status_alur: 'Disetor ke Bank',
+            status_bank: 'Sudah Disetor',
+            tanggal_setor_bank: todayStr,
+            petugas_bank: petugasBank,
+          });
+        }
+      }
+
+      return StorageService.approveSetoranBank(txIds, petugasBank, noRef);
+    } catch (e) {
+      console.error('Firestore approveSetoranBank fallback to StorageService:', e);
+      return StorageService.approveSetoranBank(txIds, petugasBank, noRef);
+    }
+  },
+
+  tolakSetoranBank: async (txIds: string[], petugasBank: string, alasan?: string) => {
+    try {
+      for (const txId of txIds) {
+        const txRef = doc(db, COLLECTIONS.TRANSAKSI, txId);
+        const snap = await getDoc(txRef);
+        if (snap.exists()) {
+          await updateDoc(txRef, {
+            status_alur: 'Disetor ke Bendahara',
+            status_bank: 'Belum Disetor',
+          });
+        }
+      }
+
+      return StorageService.tolakSetoranBank(txIds, petugasBank, alasan);
+    } catch (e) {
+      console.error('Firestore tolakSetoranBank fallback to StorageService:', e);
+      return StorageService.tolakSetoranBank(txIds, petugasBank, alasan);
     }
   },
 };

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Kelas, Siswa } from '../types';
-import { StorageService } from '../services/storage';
+import { StorageService, isSameKelas } from '../services/storage';
 import { Building2, Plus, Edit2, Trash2, Users, X } from 'lucide-react';
 
 interface KelasManagerProps {
@@ -82,9 +82,9 @@ export const KelasManager: React.FC<KelasManagerProps> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {kelasList.map((k) => {
-          const studentCount = siswaList.filter((s) => s.kelas === k.nama_kelas).length;
+          const studentCount = siswaList.filter((s) => isSameKelas(s.kelas, k.nama_kelas)).length;
           const totalClassSaldo = siswaList
-            .filter((s) => s.kelas === k.nama_kelas)
+            .filter((s) => isSameKelas(s.kelas, k.nama_kelas))
             .reduce((sum, s) => sum + s.saldo, 0);
 
           return (

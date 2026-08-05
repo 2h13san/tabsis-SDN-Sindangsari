@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Siswa, Transaksi, User, JenisTransaksi, Kelas } from '../types';
-import { formatRupiah, StorageService } from '../services/storage';
+import { formatRupiah, StorageService, isSameKelas } from '../services/storage';
 import { QRScannerModal } from './QRScannerModal';
+import { SearchableSiswaSelect } from './SearchableSiswaSelect';
 import {
   ArrowDownUp,
   PlusCircle,
@@ -73,7 +74,7 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
   // Filtered active student list based on role
   const filteredSiswaList = siswaList.filter((s) => {
     if (s.status !== 'Aktif') return false;
-    if (isGuru && activeUser.kelas && s.kelas !== activeUser.kelas) return false;
+    if (isGuru && activeUser.kelas && !isSameKelas(s.kelas, activeUser.kelas)) return false;
     return true;
   });
 
@@ -119,7 +120,7 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
     e.preventDefault();
     setBatchSuccessMsg('');
 
-    const targetStudents = siswaList.filter((s) => s.kelas === selectedBatchKelas && s.status === 'Aktif');
+    const targetStudents = siswaList.filter((s) => isSameKelas(s.kelas, selectedBatchKelas) && s.status === 'Aktif');
     let countProcessed = 0;
     let totalBatchAmount = 0;
 
@@ -235,22 +236,15 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
                   </div>
                 )}
 
-                <select
-                  value={selectedNis}
-                  onChange={(e) => {
-                    setSelectedNis(e.target.value);
+                <SearchableSiswaSelect
+                  siswaList={filteredSiswaList}
+                  selectedNis={selectedNis}
+                  onSelectSiswa={(nis) => {
+                    setSelectedNis(nis);
                     setQrNotice(null);
                   }}
                   required
-                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-white font-bold"
-                >
-                  <option value="">-- Pilih Murid --</option>
-                  {filteredSiswaList.map((s) => (
-                    <option key={s.id} value={s.nis}>
-                      {s.nis} - {s.nama} ({s.kelas}) - Saldo: Rp {s.saldo.toLocaleString('id-ID')}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               {/* Tanggal Penyetoran / Transaksi */}
@@ -498,7 +492,7 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
             </div>
           )}
 
-          {siswaList.filter((s) => s.kelas === selectedBatchKelas && s.status === 'Aktif').length === 0 ? (
+          {siswaList.filter((s) => isSameKelas(s.kelas, selectedBatchKelas) && s.status === 'Aktif').length === 0 ? (
             <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
               <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
               <p className="text-xs font-bold text-slate-700">Belum ada siswa aktif di Kelas {selectedBatchKelas}</p>
@@ -521,7 +515,7 @@ export const TransaksiManager: React.FC<TransaksiManagerProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {siswaList
-                      .filter((s) => s.kelas === selectedBatchKelas && s.status === 'Aktif')
+                      .filter((s) => isSameKelas(s.kelas, selectedBatchKelas) && s.status === 'Aktif')
                       .map((s, idx) => (
                         <tr key={s.id} className="hover:bg-slate-50">
                           <td className="p-3 text-slate-400 font-semibold">{idx + 1}</td>

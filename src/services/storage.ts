@@ -10,7 +10,37 @@ import {
   StatusSetorBank,
   StatusAlurSetoran,
   PenyerahanSetoranRecord,
+  BankMutationRecord,
 } from '../types';
+
+// Class name normalizer and matcher utilities
+export const normalizeKelasName = (kStr?: string): string => {
+  if (!kStr) return '';
+  return kStr
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/^kelas\s*/i, '') // remove "kelas " or "kelas"
+    .replace(/[\s\-_]/g, '');  // remove spaces, hyphens, underscores
+};
+
+export const isSameKelas = (k1?: string, k2?: string): boolean => {
+  if (!k1 || !k2) return false;
+  if (k1 === k2) return true;
+  if (k1 === 'Semua' || k2 === 'Semua') return true;
+
+  const norm1 = normalizeKelasName(k1);
+  const norm2 = normalizeKelasName(k2);
+
+  if (!norm1 || !norm2) return false;
+  if (norm1 === norm2) return true;
+
+  // Handles "6" matching "6a" or "6-a", or "1" matching "1-a"
+  if (norm1.length === 1 && norm2.startsWith(norm1)) return true;
+  if (norm2.length === 1 && norm1.startsWith(norm2)) return true;
+
+  return false;
+};
 
 const STORAGE_KEYS = {
   SETTINGS: 'tabsis_settings_v1',
@@ -23,12 +53,13 @@ const STORAGE_KEYS = {
   ACTIVE_USER: 'tabsis_active_user_v1',
   PASSBOOK_CONFIG: 'tabsis_passbook_config_v1',
   PENYERAHAN_SETORAN: 'tabsis_penyerahan_setoran_v1',
+  BANK_MUTATIONS: 'tabsis_bank_mutations_v1',
 };
 
 // Initial Default Settings
 export const defaultSettings: AppSettings = {
-  nama_sekolah: 'SD Negeri 01 Nusantara',
-  npsn: '20108976',
+  nama_sekolah: 'SDN Sindangsari',
+  npsn: '20210919',
   alamat: 'Jl. Pendidikan No. 45, Kebayoran, Jakarta Selatan',
   kepala_sekolah: 'Drs. H. Ahmad Wijaya, M.Pd.',
   nip_kepala_sekolah: '19700315 199512 1 002',
@@ -100,6 +131,15 @@ export const defaultUsers: User[] = [
     status: 'Aktif',
     last_login: new Date().toISOString(),
   },
+  {
+    id: 'USR-005',
+    username: 'adminbank',
+    password: 'bank123',
+    nama: 'Petugas Bank Mitra (Bank Admin)',
+    role: 'admin_bank',
+    status: 'Aktif',
+    last_login: new Date().toISOString(),
+  },
 ];
 
 // Default Siswa (Empty - No sample data)
@@ -152,13 +192,45 @@ export const setStoredData = <T>(key: string, value: T): void => {
 
 // Storage Store API
 export const StorageService = {
-  getSettings: (): AppSettings => getStoredData(STORAGE_KEYS.SETTINGS, defaultSettings),
+  getSettings: (): AppSettings => {
+    const data = getStoredData(STORAGE_KEYS.SETTINGS, defaultSettings);
+    let updated = false;
+    if (data.nama_sekolah === 'SD Negeri 01 Nusantara') {
+      data.nama_sekolah = 'SDN Sindangsari';
+      updated = true;
+    }
+    if (data.npsn === '20108976') {
+      data.npsn = '20210919';
+      updated = true;
+    }
+    if (updated) {
+      setStoredData(STORAGE_KEYS.SETTINGS, data);
+    }
+    return data;
+  },
   saveSettings: (settings: AppSettings): void => setStoredData(STORAGE_KEYS.SETTINGS, settings),
 
   getPassbookConfig: (): PrintablePassbookConfig => getStoredData(STORAGE_KEYS.PASSBOOK_CONFIG, defaultPassbookConfig),
   savePassbookConfig: (cfg: PrintablePassbookConfig): void => setStoredData(STORAGE_KEYS.PASSBOOK_CONFIG, cfg),
 
-  getUsers: (): User[] => getStoredData(STORAGE_KEYS.USERS, defaultUsers),
+  getUsers: (): User[] => {
+    const list = getStoredData<User[]>(STORAGE_KEYS.USERS, defaultUsers);
+    if (!list.some((u) => u.username === 'adminbank' || u.role === 'admin_bank')) {
+      const bankUser: User = {
+        id: 'USR-005',
+        username: 'adminbank',
+        password: 'bank123',
+        nama: 'Petugas Bank Mitra (Bank Admin)',
+        role: 'admin_bank',
+        status: 'Aktif',
+        last_login: new Date().toISOString(),
+      };
+      const updated = [...list, bankUser];
+      setStoredData(STORAGE_KEYS.USERS, updated);
+      return updated;
+    }
+    return list;
+  },
   saveUsers: (users: User[]): void => setStoredData(STORAGE_KEYS.USERS, users),
 
   getSiswa: (): Siswa[] => {
@@ -310,6 +382,68 @@ export const StorageService = {
   getPenyerahanRecords: (): PenyerahanSetoranRecord[] => getStoredData(STORAGE_KEYS.PENYERAHAN_SETORAN, []),
   savePenyerahanRecords: (records: PenyerahanSetoranRecord[]): void => setStoredData(STORAGE_KEYS.PENYERAHAN_SETORAN, records),
 
+  getBankMutations: (): BankMutationRecord[] => getStoredData(STORAGE_KEYS.BANK_MUTATIONS, []),
+  saveBankMutations: (records: BankMutationRecord[]): void => setStoredData(STORAGE_KEYS.BANK_MUTATIONS, records),
+
+  addBankMutation: (data: {
+    jenis: 'masuk' | 'tarik';
+    nominal: number;
+    no_referensi?: string;
+    keterangan: string;
+    petugas_bank: string;
+    nama_bendahara?: string;
+    tanggal?: string;
+  }): { success: boolean; message: string; newBalance: number } => {
+    if (data.nominal <= 0) {
+      return { success: false, message: 'Nominal transaksi harus lebih besar dari Rp 0.', newBalance: 0 };
+    }
+
+    const settings = StorageService.getSettings();
+    const currentBalance = settings.saldo_bank || 0;
+
+    if (data.jenis === 'tarik' && data.nominal > currentBalance) {
+      return {
+        success: false,
+        message: `Saldo Kas Bank tidak mencukupi untuk penarikan sebesar Rp ${data.nominal.toLocaleString('id-ID')} (Saldo saat ini: Rp ${currentBalance.toLocaleString('id-ID')}).`,
+        newBalance: currentBalance,
+      };
+    }
+
+    const newBalance = data.jenis === 'masuk' ? currentBalance + data.nominal : currentBalance - data.nominal;
+    settings.saldo_bank = newBalance;
+    StorageService.saveSettings(settings);
+
+    const now = new Date();
+    const txDate = data.tanggal || now.toISOString().split('T')[0];
+    const txTime = now.toTimeString().split(' ')[0];
+
+    const mutations = StorageService.getBankMutations();
+    const newRecord: BankMutationRecord = {
+      id: `BANK-${txDate.replace(/-/g, '')}-${Date.now().toString().slice(-4)}`,
+      tanggal: txDate,
+      jam: txTime,
+      jenis: data.jenis,
+      nominal: data.nominal,
+      no_referensi: data.no_referensi || (data.jenis === 'masuk' ? 'SLIP-SETOR-BANK' : 'SLIP-TARIK-BANK'),
+      keterangan: data.keterangan || (data.jenis === 'masuk' ? 'Setoran Kas Sekolah dari Bendahara' : 'Penarikan Kas Sekolah oleh Bendahara'),
+      petugas_bank: data.petugas_bank,
+      nama_bendahara: data.nama_bendahara || 'Bendahara Sekolah',
+      saldo_setelah: newBalance,
+    };
+
+    StorageService.saveBankMutations([newRecord, ...mutations]);
+    StorageService.addLog(
+      data.petugas_bank,
+      `Pencatatan Bank: ${data.jenis === 'masuk' ? 'UANG MASUK' : 'PENARIKAN'} Rp ${data.nominal.toLocaleString('id-ID')} (${data.keterangan})`
+    );
+
+    return {
+      success: true,
+      message: `Pencatatan ${data.jenis === 'masuk' ? 'Setoran Masuk' : 'Penarikan'} Kas Bank sebesar Rp ${data.nominal.toLocaleString('id-ID')} berhasil disimpan! Saldo Kas Bank terkini: Rp ${newBalance.toLocaleString('id-ID')}`,
+      newBalance,
+    };
+  },
+
   // Tier 2: Serahkan Setoran dari Wali Kelas ke Bendahara Sekolah
   serahkanSetoranKeBendahara: (
     txIds: string[],
@@ -435,52 +569,164 @@ export const StorageService = {
     };
   },
 
-  // Tier 3: Penyetoran Kas Sekolah dari Bendahara ke Bank Mitra
-  setorKasKeBankBerjenjang: (
+  // Tier 3: Bendahara mengajukan setoran ke Bank Mitra (Status: Menunggu Approval Bank)
+  ajukanSetorKasKeBankBerjenjang: (
     txIds: string[],
-    petugasBendahara: string
-  ): { success: boolean; message: string } => {
+    petugasBendahara: string,
+    catatanRef?: string
+  ): { success: boolean; message: string; totalNominal: number } => {
     const txList = StorageService.getTransaksi();
-    const settings = StorageService.getSettings();
     let totalNominal = 0;
     let countUpdated = 0;
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
     const updatedTx = txList.map((t) => {
-      if (txIds.includes(t.id) && t.jenis === 'setoran') {
+      if (txIds.includes(t.id) && t.jenis === 'setoran' && (t.status_alur === 'Disetor ke Bendahara' || t.status_bank === 'Belum Disetor')) {
         countUpdated++;
         totalNominal += t.setoran;
         return {
           ...t,
-          status_alur: 'Disetor ke Bank' as const,
-          status_bank: 'Sudah Disetor' as const,
+          status_alur: 'Menunggu Approval Bank' as const,
+          status_bank: 'Menunggu Approval Bank' as const,
           tanggal_setor_bank: todayStr,
-          petugas_bank: petugasBendahara,
+          petugas_bendahara: petugasBendahara,
+          keterangan: catatanRef ? `${t.keterangan || ''} (Ref: ${catatanRef})`.trim() : t.keterangan,
         };
       }
       return t;
     });
 
     if (countUpdated === 0) {
-      return { success: false, message: 'Tidak ada transaksi setoran valid yang dipilih untuk disetor ke Bank.' };
+      return { success: false, message: 'Tidak ada transaksi setoran valid yang dipilih untuk diajukan ke Bank.', totalNominal: 0 };
     }
 
     StorageService.saveTransaksi(updatedTx);
-
-    // Update Bank Balance in Settings
-    settings.saldo_bank = (settings.saldo_bank || 0) + totalNominal;
-    StorageService.saveSettings(settings);
-
     StorageService.addLog(
       petugasBendahara,
-      `Penyetoran Kas Sekolah dari Bendahara ke Bank Mitra sebesar Rp ${totalNominal.toLocaleString('id-ID')} (${countUpdated} transaksi)`
+      `Pengajuan Setoran Kas Sekolah ke Bank Mitra sebesar Rp ${totalNominal.toLocaleString('id-ID')} (${countUpdated} transaksi). Menunggu persetujuan Admin Bank.`
     );
 
     return {
       success: true,
-      message: `Berhasil menyetor Kas Sekolah sebesar Rp ${totalNominal.toLocaleString('id-ID')} ke Bank Mitra! (${countUpdated} transaksi terkonfirmasi).`,
+      message: `Pengajuan setoran Kas Sekolah sebesar Rp ${totalNominal.toLocaleString('id-ID')} (${countUpdated} transaksi) berhasil dikirim ke Bank Mitra! Menunggu persetujuan (Approval) Admin Bank.`,
+      totalNominal,
     };
+  },
+
+  // Tier 3 Approval: Admin Bank menyetujui setoran dari Bendahara
+  approveSetoranBank: (
+    txIds: string[],
+    petugasBank: string,
+    noRef?: string
+  ): { success: boolean; message: string; newBalance: number } => {
+    const txList = StorageService.getTransaksi();
+    const settings = StorageService.getSettings();
+    let totalApproved = 0;
+    let countUpdated = 0;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    let namaBendahara = 'Bendahara Sekolah';
+
+    const updatedTx = txList.map((t) => {
+      if (txIds.includes(t.id) && t.jenis === 'setoran') {
+        countUpdated++;
+        totalApproved += t.setoran;
+        if (t.petugas_bendahara) namaBendahara = t.petugas_bendahara;
+        return {
+          ...t,
+          status_alur: 'Disetor ke Bank' as const,
+          status_bank: 'Sudah Disetor' as const,
+          tanggal_setor_bank: todayStr,
+          petugas_bank: petugasBank,
+        };
+      }
+      return t;
+    });
+
+    if (countUpdated === 0) {
+      return { success: false, message: 'Tidak ada transaksi setoran yang dapat disetujui.', newBalance: settings.saldo_bank || 0 };
+    }
+
+    StorageService.saveTransaksi(updatedTx);
+
+    // Update Saldo Bank di Settings
+    const newBankBalance = (settings.saldo_bank || 0) + totalApproved;
+    settings.saldo_bank = newBankBalance;
+    StorageService.saveSettings(settings);
+
+    // Record Bank Mutation Record
+    const mutations = StorageService.getBankMutations();
+    const refNumber = noRef || `SLIP-APPROVE-${todayStr.replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
+    const bankRecord: BankMutationRecord = {
+      id: `BANK-${todayStr.replace(/-/g, '')}-${Date.now().toString().slice(-4)}`,
+      tanggal: todayStr,
+      jam: now.toTimeString().split(' ')[0],
+      jenis: 'masuk',
+      nominal: totalApproved,
+      no_referensi: refNumber,
+      keterangan: `Persetujuan Setoran Kas Sekolah (${countUpdated} Transaksi) dari Bendahara (${namaBendahara})`,
+      petugas_bank: petugasBank,
+      nama_bendahara: namaBendahara,
+      saldo_setelah: newBankBalance,
+    };
+    StorageService.saveBankMutations([bankRecord, ...mutations]);
+
+    StorageService.addLog(
+      petugasBank,
+      `Persetujuan (Approval) Setoran Bank: Rp ${totalApproved.toLocaleString('id-ID')} (${countUpdated} transaksi) dari Bendahara ${namaBendahara}. Saldo Bank sekarang: Rp ${newBankBalance.toLocaleString('id-ID')}`
+    );
+
+    return {
+      success: true,
+      message: `Persetujuan setoran kas sebesar Rp ${totalApproved.toLocaleString('id-ID')} berhasil diproses! Saldo Bank telah diperbarui menjadi Rp ${newBankBalance.toLocaleString('id-ID')}.`,
+      newBalance: newBankBalance,
+    };
+  },
+
+  // Tier 3 Rejection: Admin Bank menolak / mengembalikan pengajuan setoran ke Bendahara
+  tolakSetoranBank: (
+    txIds: string[],
+    petugasBank: string,
+    alasan?: string
+  ): { success: boolean; message: string } => {
+    const txList = StorageService.getTransaksi();
+    let countUpdated = 0;
+
+    const updatedTx = txList.map((t) => {
+      if (txIds.includes(t.id) && t.status_alur === 'Menunggu Approval Bank') {
+        countUpdated++;
+        return {
+          ...t,
+          status_alur: 'Disetor ke Bendahara' as const,
+          status_bank: 'Belum Disetor' as const,
+        };
+      }
+      return t;
+    });
+
+    if (countUpdated === 0) {
+      return { success: false, message: 'Tidak ada transaksi pengajuan setoran yang dapat dikembalikan.' };
+    }
+
+    StorageService.saveTransaksi(updatedTx);
+    StorageService.addLog(
+      petugasBank,
+      `Penolakan / Pengembalian Setoran Bank (${countUpdated} transaksi) kembali ke Bendahara. Alasan: ${alasan || 'Pengecekan ulang fisik uang'}`
+    );
+
+    return {
+      success: true,
+      message: `Pengajuan setoran (${countUpdated} transaksi) berhasil dikembalikan ke Bendahara untuk dikaji ulang.`,
+    };
+  },
+
+  // Tier 3: Penyetoran Kas Sekolah dari Bendahara ke Bank Mitra
+  setorKasKeBankBerjenjang: (
+    txIds: string[],
+    petugasBendahara: string
+  ): { success: boolean; message: string } => {
+    return StorageService.ajukanSetorKasKeBankBerjenjang(txIds, petugasBendahara);
   },
 
   // Deposit cash to bank

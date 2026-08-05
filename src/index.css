@@ -1,1 +1,27 @@
 @import "tailwindcss";
+
+/* HTML5-QRCode Camera Feed & Canvas Responsive Styling */
+#qr-reader-viewport, #qr-reader {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 250px !important;
+  position: relative !important;
+  overflow: hidden !important;
+  background-color: #020617 !important; /* slate-950 */
+}
+
+#qr-reader-viewport video, #qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 0.75rem !important;
+  display: block !important;
+  margin: 0 auto !important;
+}
+
+#qr-reader-viewport #qr-shaded-region, #qr-shaded-region {
+  border-style: solid !important;
+  border-width: 2px !important;
+  border-color: rgba(16, 185, 129, 0.9) !important; /* emerald-500 */
+}
+

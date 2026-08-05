@@ -105,6 +105,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     if (role === 'admin') targetUser = users.find((u) => u.role === 'admin');
     else if (role === 'bendahara') targetUser = users.find((u) => u.role === 'bendahara');
     else if (role === 'guru') targetUser = users.find((u) => u.role === 'guru');
+    else if (role === 'admin_bank') targetUser = users.find((u) => u.role === 'admin_bank');
     else if (role === 'orang_tua') {
       const firstSiswa = siswaList[0];
       if (firstSiswa) {

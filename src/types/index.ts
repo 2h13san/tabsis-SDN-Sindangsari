@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'bendahara' | 'guru' | 'orang_tua';
+export type UserRole = 'admin' | 'bendahara' | 'guru' | 'orang_tua' | 'admin_bank';
 
 export interface AppSettings {
   nama_sekolah: string;
@@ -45,11 +45,12 @@ export interface Siswa {
   qr_code?: string;
   qr_image_url?: string;
   qr_updated_at?: string;
+  pin?: string;
 }
 
 export type JenisTransaksi = 'setoran' | 'penarikan' | 'koreksi';
-export type StatusSetorBank = 'Belum Disetor' | 'Sudah Disetor';
-export type StatusAlurSetoran = 'Di Wali Kelas' | 'Disetor ke Bendahara' | 'Disetor ke Bank';
+export type StatusSetorBank = 'Belum Disetor' | 'Menunggu Approval Bank' | 'Sudah Disetor';
+export type StatusAlurSetoran = 'Di Wali Kelas' | 'Disetor ke Bendahara' | 'Menunggu Approval Bank' | 'Disetor ke Bank';
 
 export interface Transaksi {
   id: string; // Nomor transaksi otomatis (misal: TRX-20260803-001)
@@ -121,4 +122,17 @@ export interface PrintablePassbookConfig {
   tampilkan_header: boolean;
   margin_atas_mm: number;
   margin_kiri_mm: number;
+}
+
+export interface BankMutationRecord {
+  id: string; // e.g. BANK-20260804-001
+  tanggal: string; // YYYY-MM-DD
+  jam: string; // HH:mm:ss
+  jenis: 'masuk' | 'tarik'; // 'masuk' = Setoran Bendahara, 'tarik' = Penarikan Bendahara
+  nominal: number;
+  no_referensi?: string; // Slip bank / Cek / Giro / Ref transfer
+  keterangan: string;
+  petugas_bank: string;
+  nama_bendahara?: string;
+  saldo_setelah: number;
 }

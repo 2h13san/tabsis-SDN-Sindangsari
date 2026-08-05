@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AppSettings, User, Siswa, Transaksi } from '../types';
 import { formatRupiah, formatDateIndo, StorageService } from '../services/storage';
+import { BankPortalView } from './BankPortalView';
 import {
   Users,
   Wallet,
@@ -48,6 +49,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [showSetorBankModal, setShowSetorBankModal] = useState(false);
   const [setorBankAmount, setSetorBankAmount] = useState<number>(0);
   const [bankMsg, setBankMsg] = useState('');
+
+  // Early return for Bank Partner Role
+  if (activeUser.role === 'admin_bank') {
+    return (
+      <BankPortalView
+        settings={settings}
+        activeUser={activeUser}
+        transaksiList={transaksiList}
+        onRefreshData={onRefreshData}
+      />
+    );
+  }
 
   // Filtering for active role
   const isGuru = activeUser.role === 'guru' || activeUser.role === 'wali_kelas' || Boolean(activeUser.kelas);

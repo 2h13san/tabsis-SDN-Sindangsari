@@ -102,6 +102,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     if (role === 'admin') targetUser = users.find((u) => u.role === 'admin');
     else if (role === 'bendahara') targetUser = users.find((u) => u.role === 'bendahara');
     else if (role === 'guru') targetUser = users.find((u) => u.role === 'guru');
+    else if (role === 'admin_bank') targetUser = users.find((u) => u.role === 'admin_bank');
     else if (role === 'orang_tua') {
       const firstSiswa = siswaList[0];
       if (firstSiswa) {
@@ -151,7 +152,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
           <div>
             <span className="text-3xs font-extrabold uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100 inline-block mb-1">
-              SD DIGITAL PORTAL • NPSN {settings.npsn}
+              PORTAL TABSIS DIGITAL • NPSN {settings.npsn}
             </span>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-snug">
               {settings.nama_sekolah}
@@ -224,7 +225,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       required
-                      placeholder="Ketik username (admin / bendahara / guru)..."
+                      placeholder="Ketik username (admin / bendahara / guru / adminbank)..."
                       className="w-full pl-10 pr-3 py-2.5 text-xs font-bold border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50/50"
                     />
                   </div>
@@ -254,6 +255,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <ShieldCheck className="w-4 h-4 text-emerald-300" />
                   <span>MASUK SEBAGAI PETUGAS</span>
                 </button>
+
               </form>
             ) : (
               /* SISWA / ORANG TUA FORM */

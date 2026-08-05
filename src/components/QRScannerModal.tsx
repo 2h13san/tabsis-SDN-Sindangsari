@@ -29,6 +29,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState(false);
@@ -44,32 +45,12 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     }
 
     // Load camera list on open
-    Html5Qrcode.getCameras()
-      .then((devices) => {
-        if (devices && devices.length > 0) {
-          const mapped = devices.map((d) => ({ id: d.id, label: d.label || `Kamera ${d.id}` }));
-          setCameras(mapped);
-          // Prefer back camera if label includes back/rear/environment
-          const backCam = mapped.find(
-            (c) =>
-              c.label.toLowerCase().includes('back') ||
-              c.label.toLowerCase().includes('rear') ||
-              c.label.toLowerCase().includes('belakang') ||
-              c.label.toLowerCase().includes('environment')
-          );
-          if (backCam) {
-            setSelectedCameraId(backCam.id);
-          }
-        }
-      })
-      .catch((err) => {
-        console.warn('Could not enumerate cameras:', err);
-      });
+    refreshCameraList();
 
     if (activeTab === 'camera') {
       const timer = setTimeout(() => {
         startCameraScanner();
-      }, 250);
+      }, 200);
 
       return () => {
         clearTimeout(timer);
@@ -79,6 +60,38 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       stopCameraScanner();
     }
   }, [isOpen, activeTab, selectedCameraId]);
+
+  const refreshCameraList = async () => {
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices && devices.length > 0) {
+        const mapped = devices.map((d) => ({
+          id: d.id,
+          label: d.label || `Kamera ${d.id.substring(0, 5)}...`,
+        }));
+        setCameras(mapped);
+
+        // Auto-select back/rear camera if not explicitly selected yet
+        if (!selectedCameraId) {
+          const backCam = mapped.find(
+            (c) =>
+              c.label.toLowerCase().includes('back') ||
+              c.label.toLowerCase().includes('rear') ||
+              c.label.toLowerCase().includes('belakang') ||
+              c.label.toLowerCase().includes('environment') ||
+              c.label.toLowerCase().includes('0')
+          );
+          if (backCam) {
+            setSelectedCameraId(backCam.id);
+          } else {
+            setSelectedCameraId(mapped[0].id);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Could not enumerate cameras:', err);
+    }
+  };
 
   const stopCameraScanner = async () => {
     if (scannerRef.current) {
@@ -92,18 +105,24 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       } finally {
         scannerRef.current = null;
         setIsScanning(false);
+        setIsCameraLoading(false);
         setTorchOn(false);
         setHasTorch(false);
       }
+    } else {
+      setIsScanning(false);
+      setIsCameraLoading(false);
     }
   };
 
   const startCameraScanner = async () => {
     setCameraError(null);
+    setIsCameraLoading(true);
+    setIsScanning(false);
     try {
       const containerEl = document.getElementById(qrContainerId);
       if (!containerEl) {
-        setIsScanning(false);
+        setIsCameraLoading(false);
         return;
       }
 
@@ -134,48 +153,59 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         const boxWidth = Math.min(viewfinderWidth * 0.88, 340);
         const boxHeight = Math.min(viewfinderHeight * 0.60, 220);
         return {
-          width: Math.max(180, Math.floor(boxWidth)),
+          width: Math.max(160, Math.floor(boxWidth)),
           height: Math.max(120, Math.floor(boxHeight)),
         };
       };
 
       const config = {
-        fps: 20,
+        fps: 15,
         qrbox: qrboxFunction,
-        aspectRatio: 1.333333,
         experimentalFeatures: {
           useBarCodeDetectorIfSupported: true,
         },
       };
 
+      // Robust Multi-tier Fallback Strategy for PC & Mobile
+      const attemptsToTry: any[] = [];
+      if (selectedCameraId) {
+        attemptsToTry.push({ deviceId: { exact: selectedCameraId } });
+        attemptsToTry.push({ deviceId: selectedCameraId });
+      }
+      attemptsToTry.push({ facingMode: 'environment' }); // Back camera on HP
+      attemptsToTry.push({ facingMode: 'user' }); // Front camera / PC webcam
+      attemptsToTry.push({}); // Fallback default camera
+
+      let started = false;
+      let lastStartError: any = null;
+
+      for (const constraint of attemptsToTry) {
+        try {
+          await html5Qrcode.start(
+            constraint,
+            config,
+            (decodedText) => {
+              handleDecodedResult(decodedText);
+            },
+            () => {}
+          );
+          started = true;
+          break;
+        } catch (err) {
+          lastStartError = err;
+          console.warn('Camera constraint failed, trying next:', constraint, err);
+        }
+      }
+
+      if (!started) {
+        throw lastStartError || new Error('Tidak ada kamera yang tersedia');
+      }
+
+      setIsCameraLoading(false);
       setIsScanning(true);
 
-      // Prefer facingMode environment for HP smartphones
-      const cameraConstraint: any = selectedCameraId
-        ? { deviceId: { exact: selectedCameraId } }
-        : { facingMode: 'environment' };
-
-      try {
-        await html5Qrcode.start(
-          cameraConstraint,
-          config,
-          (decodedText) => {
-            handleDecodedResult(decodedText);
-          },
-          () => {}
-        );
-      } catch (firstErr) {
-        // Fallback to basic facingMode if exact deviceId failed
-        console.warn('First camera start failed, trying basic facingMode environment:', firstErr);
-        await html5Qrcode.start(
-          { facingMode: 'environment' },
-          config,
-          (decodedText) => {
-            handleDecodedResult(decodedText);
-          },
-          () => {}
-        );
-      }
+      // Refresh camera labels after permission granted
+      refreshCameraList();
 
       // Check if torch feature is available on HP camera
       try {
@@ -188,10 +218,11 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       }
     } catch (err: any) {
       console.warn('Camera scanner start error:', err);
+      setIsCameraLoading(false);
       setIsScanning(false);
 
       setCameraError(
-        'Kamera live HP tidak dapat terbuka atau izin ditolak. Silakan tekan tombol "Foto Barcode via Kamera HP" di bawah atau buka lewat tab "Foto / File HP".'
+        'Kamera PC/HP tidak dapat terbuka atau izin ditolak browser. Pastikan memberikan izin (Allow Camera) atau gunakan tab "Foto / File HP" atau "Input USB".'
       );
     }
   };
@@ -259,12 +290,16 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     onClose();
   };
 
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsProcessingFile(true);
+
     try {
-      // 1. Try native browser BarcodeDetector API if available (Android Chrome / Edge / Opera)
+      // 1. Try native browser BarcodeDetector API if available (Android Chrome / Edge / Opera / Mac)
       if ('BarcodeDetector' in window) {
         try {
           const detector = new (window as any).BarcodeDetector({
@@ -273,6 +308,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           const imageBitmap = await createImageBitmap(file);
           const detected = await detector.detect(imageBitmap);
           if (detected && detected.length > 0) {
+            setIsProcessingFile(false);
             handleDecodedResult(detected[0].rawValue);
             return;
           }
@@ -281,7 +317,15 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         }
       }
 
-      // 2. Fallback to html5Qrcode scanFile
+      // 2. Ensure temporary DOM element exists for html5Qrcode scanFile
+      let fileTempEl = document.getElementById('qr-reader-file-temp');
+      if (!fileTempEl) {
+        fileTempEl = document.createElement('div');
+        fileTempEl.id = 'qr-reader-file-temp';
+        fileTempEl.style.display = 'none';
+        document.body.appendChild(fileTempEl);
+      }
+
       const html5Qrcode = new Html5Qrcode('qr-reader-file-temp', {
         formatsToSupport: [
           Html5QrcodeSupportedFormats.QR_CODE,
@@ -296,9 +340,12 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         ],
         verbose: false,
       });
+
       const decodedText = await html5Qrcode.scanFile(file, true);
+      setIsProcessingFile(false);
       handleDecodedResult(decodedText);
     } catch (err) {
+      setIsProcessingFile(false);
       alert(
         'Barcode / QR Code tidak terdeteksi pada gambar. Pastikan foto kartu cukup terang, fokus, dan tegak.'
       );
@@ -374,18 +421,42 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         {/* Content Body */}
         <div className="p-4 sm:p-5">
+          {/* Always rendered hidden container for scanFile */}
+          <div id="qr-reader-file-temp" style={{ display: 'none' }}></div>
+
           {activeTab === 'camera' && (
             <div className="space-y-3 text-center">
-              {/* Camera Viewport */}
-              <div
-                id={qrContainerId}
-                className="w-full h-64 sm:h-72 bg-slate-950 rounded-2xl overflow-hidden relative flex items-center justify-center border border-slate-800 shadow-inner"
-              >
-                {!isScanning && !cameraError && (
-                  <div className="text-white text-xs flex flex-col items-center gap-2 p-4">
+              {/* Camera Selection Dropdown for PC / Multi-camera phones */}
+              {cameras.length > 0 && (
+                <div className="text-left">
+                  <label className="block text-3xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Pilih Kamera (PC / HP):
+                  </label>
+                  <select
+                    value={selectedCameraId || ''}
+                    onChange={(e) => setSelectedCameraId(e.target.value)}
+                    className="w-full text-xs font-semibold py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                  >
+                    {cameras.map((cam, idx) => (
+                      <option key={cam.id || idx} value={cam.id}>
+                        📷 {cam.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Camera Viewport Container */}
+              <div className="w-full h-64 sm:h-72 bg-slate-950 rounded-2xl overflow-hidden relative border border-slate-800 shadow-inner">
+                {/* HTML5-QRCode Mount Point */}
+                <div id={qrContainerId} className="w-full h-full relative" />
+
+                {/* Loading Overlay */}
+                {isCameraLoading && !cameraError && (
+                  <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center text-white text-xs gap-2 p-4 z-20 pointer-events-none">
                     <RefreshCw className="w-7 h-7 animate-spin text-emerald-400" />
-                    <span className="font-medium">Membuka kamera HP...</span>
-                    <span className="text-3xs text-slate-400">Pastikan memberi izin akses kamera</span>
+                    <span className="font-medium">Membuka kamera PC / HP...</span>
+                    <span className="text-3xs text-slate-400">Pastikan memberikan izin (Allow) akses kamera di browser</span>
                   </div>
                 )}
               </div>
@@ -399,7 +470,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                     className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <SwitchCamera className="w-4 h-4 text-emerald-600" />
-                    <span>Ganti Kamera HP</span>
+                    <span>Ganti Kamera HP ({cameras.length})</span>
                   </button>
                 ) : (
                   <div className="text-3xs text-slate-400 font-medium">Mode Kamera Aktif</div>
@@ -425,7 +496,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-start gap-2.5 text-left">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <div className="space-y-1">
-                    <span className="font-bold block text-rose-900">Kamera HP Terkendala</span>
+                    <span className="font-bold block text-rose-900">Kamera Terkendala</span>
                     <p className="text-3xs text-rose-700 leading-relaxed">{cameraError}</p>
                     <button
                       type="button"
@@ -464,8 +535,13 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
           {activeTab === 'upload' && (
             <div className="space-y-3 py-2">
-              <div id="qr-reader-file-temp" className="hidden"></div>
-              
+              {isProcessingFile && (
+                <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 text-xs rounded-xl flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                  <span className="font-bold">Memproses foto barcode / QR code...</span>
+                </div>
+              )}
+
               {/* Option 1: Direct Camera Capture on HP */}
               <label className="border-2 border-emerald-300 hover:border-emerald-500 bg-emerald-50/60 hover:bg-emerald-100/60 p-5 rounded-2xl flex items-center gap-3 cursor-pointer transition-all group">
                 <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -495,7 +571,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 </div>
                 <div className="text-left flex-1">
                   <span className="text-xs font-bold text-slate-800 block">
-                    Pilih Foto / File dari Galeri HP
+                    Pilih Foto / File dari Galeri HP / Komputer
                   </span>
                   <span className="text-3xs text-slate-500 font-medium block mt-0.5">
                     Pilih gambar yang tersimpan (Format PNG, JPG, WEBP)

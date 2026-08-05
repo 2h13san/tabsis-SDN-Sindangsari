@@ -84,7 +84,7 @@ export const UserManager: React.FC<UserManagerProps> = ({ usersList, kelasList, 
             <UserCog className="w-6 h-6 text-emerald-600" />
             <span>Kelola Pengguna System (USERS Sheet)</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">Daftar pengguna dengan role Admin, Bendahara, dan Guru.</p>
+          <p className="text-xs text-slate-500 mt-0.5">Daftar pengguna dengan role Admin, Bendahara, Guru, dan Admin Bank.</p>
         </div>
 
         <button
@@ -115,7 +115,15 @@ export const UserManager: React.FC<UserManagerProps> = ({ usersList, kelasList, 
                 <td className="p-3 font-mono font-bold text-slate-500 text-2xs">{u.id}</td>
                 <td className="p-3 font-mono font-bold text-slate-800">{u.username}</td>
                 <td className="p-3 font-bold text-slate-900">{u.nama}</td>
-                <td className="p-3 font-bold uppercase text-slate-700">{u.role}</td>
+                <td className="p-3 font-bold uppercase text-slate-700">
+                  {u.role === 'admin_bank' ? (
+                    <span className="bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded-full text-3xs font-extrabold border border-cyan-200">
+                      ADMIN BANK
+                    </span>
+                  ) : (
+                    u.role
+                  )}
+                </td>
                 <td className="p-3 text-slate-600">{u.kelas || '-'}</td>
                 <td className="p-3 text-center">
                   <span
@@ -208,6 +216,7 @@ export const UserManager: React.FC<UserManagerProps> = ({ usersList, kelasList, 
                     <option value="admin">Admin</option>
                     <option value="bendahara">Bendahara</option>
                     <option value="guru">Guru (Wali Kelas)</option>
+                    <option value="admin_bank">Admin Bank Mitra</option>
                   </select>
                 </div>
 

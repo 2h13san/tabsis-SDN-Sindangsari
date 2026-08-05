@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Siswa, Kelas, User, AppSettings } from '../types';
-import { formatRupiah, formatDateIndo, StorageService } from '../services/storage';
+import { formatRupiah, formatDateIndo, StorageService, isSameKelas } from '../services/storage';
 import { QRCodeDisplayModal } from './QRCodeDisplayModal';
 import { QRScannerModal } from './QRScannerModal';
 import { SiswaImportExportModal } from './SiswaImportExportModal';
@@ -83,10 +83,10 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
   const isOrangTua = activeUser.role === 'orang_tua';
 
   const displayedSiswa = siswaList.filter((s) => {
-    if (isGuru && activeUser.kelas && s.kelas !== activeUser.kelas) return false;
-    if (isOrangTua && s.nisn !== activeUser.username && s.kelas !== activeUser.kelas) return false;
+    if (isGuru && activeUser.kelas && !isSameKelas(s.kelas, activeUser.kelas)) return false;
+    if (isOrangTua && s.nisn !== activeUser.username && !isSameKelas(s.kelas, activeUser.kelas)) return false;
 
-    if (filterKelas !== 'Semua' && s.kelas !== filterKelas) return false;
+    if (filterKelas !== 'Semua' && !isSameKelas(s.kelas, filterKelas)) return false;
 
     const matchesSearch =
       s.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -394,12 +394,12 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">NISN (Nasional)</label>
+                  <label className="block font-bold text-slate-700 mb-1">NISN (Nasional) <span className="text-slate-400 text-3xs font-normal">(Opsional)</span></label>
                   <input
                     type="text"
                     value={formNisn}
                     onChange={(e) => setFormNisn(e.target.value)}
-                    required
+                    placeholder="NISN (jika ada)"
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 font-bold"
                   />
                 </div>
@@ -448,24 +448,22 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Nama Orang Tua / Wali</label>
+                  <label className="block font-bold text-slate-700 mb-1">Nama Orang Tua / Wali <span className="text-slate-400 text-3xs font-normal">(Opsional)</span></label>
                   <input
                     type="text"
                     value={formOrangTua}
                     onChange={(e) => setFormOrangTua(e.target.value)}
-                    required
-                    placeholder="Nama ayah/ibu"
+                    placeholder="Nama ayah/ibu (jika ada)"
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">No. WhatsApp / HP</label>
+                  <label className="block font-bold text-slate-700 mb-1">No. WhatsApp / HP <span className="text-slate-400 text-3xs font-normal">(Opsional)</span></label>
                   <input
                     type="text"
                     value={formTelepon}
                     onChange={(e) => setFormTelepon(e.target.value)}
-                    required
-                    placeholder="081234567890"
+                    placeholder="081234567890 (jika ada)"
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
@@ -498,12 +496,11 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Tanggal Pendaftaran / Masuk</label>
+                <label className="block font-bold text-slate-700 mb-1">Tanggal Pendaftaran / Masuk <span className="text-slate-400 text-3xs font-normal">(Opsional)</span></label>
                 <input
                   type="date"
                   value={formTanggalDaftar}
                   onChange={(e) => setFormTanggalDaftar(e.target.value)}
-                  required
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 font-bold bg-white"
                 />
               </div>

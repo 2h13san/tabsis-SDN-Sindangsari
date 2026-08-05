@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'dashboard',
       label: 'Dashboard',
       icon: LayoutDashboard,
-      roles: ['admin', 'bendahara', 'guru', 'orang_tua'],
+      roles: ['admin', 'bendahara', 'guru', 'orang_tua', 'admin_bank'],
     },
     {
       id: 'transaksi',
@@ -78,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'laporan',
       label: 'Laporan Keuangan',
       icon: FileSpreadsheet,
-      roles: ['admin', 'bendahara'],
+      roles: ['admin', 'bendahara', 'admin_bank'],
     },
     {
       id: 'kelas',

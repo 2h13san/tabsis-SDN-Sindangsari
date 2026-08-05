@@ -11,6 +11,7 @@ import {
   QrCode,
   Menu,
   X,
+  Landmark,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -40,6 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
         return <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-emerald-200">Bendahara</span>;
       case 'guru':
         return <span className="bg-blue-100 text-blue-800 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-blue-200">Guru ({activeUser.kelas || 'Wali'})</span>;
+      case 'admin_bank':
+        return <span className="bg-cyan-100 text-cyan-800 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-cyan-200 flex items-center gap-1"><Landmark className="w-3.5 h-3.5" /> Admin Bank Mitra</span>;
       case 'orang_tua':
         return <span className="bg-amber-100 text-amber-800 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-amber-200">Orang Tua / Siswa</span>;
       default:

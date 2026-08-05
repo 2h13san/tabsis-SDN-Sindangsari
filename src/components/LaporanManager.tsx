@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Siswa, Transaksi, AppSettings, Kelas, User } from '../types';
-import { formatRupiah, formatDateIndo } from '../services/storage';
+import { formatRupiah, formatDateIndo, isSameKelas } from '../services/storage';
+import { BankLaporanView } from './BankLaporanView';
 import {
   FileSpreadsheet,
   Printer,
@@ -44,6 +45,16 @@ export const LaporanManager: React.FC<LaporanManagerProps> = ({
   settings,
   activeUser,
 }) => {
+  // Early return for Bank Partner Role
+  if (activeUser?.role === 'admin_bank') {
+    return (
+      <BankLaporanView
+        settings={settings}
+        activeUser={activeUser}
+      />
+    );
+  }
+
   const isGuru = activeUser?.role === 'guru' || Boolean(activeUser?.kelas);
 
   const [reportMode, setReportMode] = useState<'matriks_fisik' | 'buku_induk_tahunan' | 'jurnal_transaksi'>('matriks_fisik');
@@ -65,20 +76,20 @@ export const LaporanManager: React.FC<LaporanManagerProps> = ({
 
   // Filtered Students for selected class
   const classStudents = siswaList.filter((s) => {
-    if (isGuru && activeUser?.kelas && s.kelas !== activeUser.kelas) return false;
+    if (isGuru && activeUser?.kelas && !isSameKelas(s.kelas, activeUser.kelas)) return false;
     if (filterKelas === 'Semua') return true;
-    return s.kelas === filterKelas;
+    return isSameKelas(s.kelas, filterKelas);
   });
 
   const activeWaliKelas =
-    kelasList.find((k) => k.nama_kelas === filterKelas)?.wali_kelas ||
+    kelasList.find((k) => isSameKelas(k.nama_kelas, filterKelas))?.wali_kelas ||
     classStudents[0]?.wali_kelas ||
     settings.bendahara;
 
   // Filtered Transactions for Journal mode
   const filteredTx = transaksiList.filter((t) => {
-    if (isGuru && activeUser?.kelas && t.kelas !== activeUser.kelas) return false;
-    if (filterKelas !== 'Semua' && t.kelas !== filterKelas) return false;
+    if (isGuru && activeUser?.kelas && !isSameKelas(t.kelas, activeUser.kelas)) return false;
+    if (filterKelas !== 'Semua' && !isSameKelas(t.kelas, filterKelas)) return false;
     if (filterMonth && !t.tanggal.startsWith(filterMonth)) return false;
     return true;
   });
@@ -95,9 +106,15 @@ export const LaporanManager: React.FC<LaporanManagerProps> = ({
 
   // Compute Matrix Ledger Data per Student (Monthly Daily)
   const matrixData = classStudents.map((siswa, idx) => {
+    const isStudentMatch = (t: Transaksi) => {
+      if (t.nis && siswa.nis && t.nis === siswa.nis) return true;
+      if (t.nama && siswa.nama && t.nama.trim().toLowerCase() === siswa.nama.trim().toLowerCase()) return true;
+      return false;
+    };
+
     // Tx before filterMonth
     const txBeforeMonth = transaksiList.filter((t) => {
-      if (t.nis !== siswa.nis) return false;
+      if (!isStudentMatch(t)) return false;
       return t.tanggal < `${filterMonth}-01`;
     });
 
@@ -112,7 +129,7 @@ export const LaporanManager: React.FC<LaporanManagerProps> = ({
 
     // Tx in filterMonth
     const txThisMonth = transaksiList.filter((t) => {
-      if (t.nis !== siswa.nis) return false;
+      if (!isStudentMatch(t)) return false;
       return t.tanggal.startsWith(filterMonth);
     });
 
@@ -184,9 +201,15 @@ export const LaporanManager: React.FC<LaporanManagerProps> = ({
   ];
 
   const bukuIndukData = classStudents.map((siswa, idx) => {
+    const isStudentMatch = (t: Transaksi) => {
+      if (t.nis && siswa.nis && t.nis === siswa.nis) return true;
+      if (t.nama && siswa.nama && t.nama.trim().toLowerCase() === siswa.nama.trim().toLowerCase()) return true;
+      return false;
+    };
+
     // Initial balance at start of school year (before July 1st of startYearAjaran)
     const txBeforeYear = transaksiList.filter(
-      (t) => t.nis === siswa.nis && t.tanggal < `${startYearAjaran}-07-01`
+      (t) => isStudentMatch(t) && t.tanggal < `${startYearAjaran}-07-01`
     );
     const setoranAwal = txBeforeYear
       .filter((t) => t.jenis === 'setoran')
@@ -202,7 +225,7 @@ export const LaporanManager: React.FC<LaporanManagerProps> = ({
 
     const monthlyBreakdown = TAHUN_AJARAN_MONTHS.map((m) => {
       const txThisMonth = transaksiList.filter(
-        (t) => t.nis === siswa.nis && t.tanggal.startsWith(m.monthKey)
+        (t) => isStudentMatch(t) && t.tanggal.startsWith(m.monthKey)
       );
       const setoran = txThisMonth
         .filter((t) => t.jenis === 'setoran')
