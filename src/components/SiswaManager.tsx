@@ -75,6 +75,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
   const [formSaldoAwal, setFormSaldoAwal] = useState<number>(0);
   const [formStatus, setFormStatus] = useState<'Aktif' | 'Lulus' | 'Pindah'>('Aktif');
   const [formTanggalDaftar, setFormTanggalDaftar] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [formPin, setFormPin] = useState('');
 
   const canEdit = activeUser.role === 'admin' || activeUser.role === 'bendahara';
 
@@ -108,6 +109,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
     setFormSaldoAwal(0);
     setFormStatus('Aktif');
     setFormTanggalDaftar(new Date().toISOString().split('T')[0]);
+    setFormPin('');
     setShowAddModal(true);
   };
 
@@ -123,6 +125,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
     setFormSaldoAwal(siswa.saldo);
     setFormStatus(siswa.status);
     setFormTanggalDaftar(siswa.tanggal_daftar || new Date().toISOString().split('T')[0]);
+    setFormPin(siswa.pin || '');
     setShowAddModal(true);
   };
 
@@ -148,6 +151,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
               saldo: formSaldoAwal,
               status: formStatus,
               tanggal_daftar: formTanggalDaftar,
+              pin: formPin.trim() || s.pin,
             }
           : s
       );
@@ -167,6 +171,7 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
         saldo: formSaldoAwal,
         status: formStatus,
         tanggal_daftar: formTanggalDaftar || new Date().toISOString().split('T')[0],
+        pin: formPin.trim() || undefined,
       };
       StorageService.saveSiswa([...siswaList, newSiswaObj]);
       StorageService.addLog(activeUser.nama, `Menambahkan siswa baru ${formNama} (Kelas ${formKelas})`);
@@ -495,14 +500,30 @@ export const SiswaManager: React.FC<SiswaManagerProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Tanggal Pendaftaran / Masuk <span className="text-slate-400 text-3xs font-normal">(Opsional)</span></label>
-                <input
-                  type="date"
-                  value={formTanggalDaftar}
-                  onChange={(e) => setFormTanggalDaftar(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 font-bold bg-white"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Tanggal Masuk <span className="text-slate-400 text-3xs font-normal">(Opsional)</span></label>
+                  <input
+                    type="date"
+                    value={formTanggalDaftar}
+                    onChange={(e) => setFormTanggalDaftar(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 font-bold bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">PIN Rahasia Siswa (4-6 Digit)</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={formPin}
+                      onChange={(e) => setFormPin(e.target.value.replace(/\D/g, ''))}
+                      placeholder={editingSiswa ? "Kosongkan jika tdk diubah" : "Bawaan: 4 digit NISN"}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono font-bold bg-white"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-2 pt-2">

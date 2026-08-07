@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Siswa } from '../types';
 import { StorageService } from '../services/storage';
 import { QRScannerModal } from './QRScannerModal';
+import { SiswaPinPromptModal } from './SiswaPinPromptModal';
 import {
   Lock,
   User as UserIcon,
@@ -37,6 +38,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [nisnInput, setNisnInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [selectedSiswaForPin, setSelectedSiswaForPin] = useState<Siswa | null>(null);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [fromQrScan, setFromQrScan] = useState(false);
 
   if (!isOpen) return null;
 
@@ -81,23 +85,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const handleLoginOrangTua = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
-
-    let foundSiswa: Siswa | undefined;
-
-    if (selectedSiswaId) {
-      foundSiswa = siswaList.find((s) => s.id === selectedSiswaId);
-    } else if (nisnInput.trim()) {
-      const cleanNisn = nisnInput.trim();
-      foundSiswa = siswaList.find(
-        (s) => s.nisn === cleanNisn || s.nis === cleanNisn || s.nama.toLowerCase().includes(cleanNisn.toLowerCase())
-      );
-    }
-
-    if (foundSiswa) {
-      handleLoginSiswaDirect(foundSiswa);
-    } else {
-      setErrorMsg('Data siswa tidak ditemukan! Pilih siswa dari daftar atau periksa NISN.');
-    }
+    setSelectedSiswaForPin(null);
+    setFromQrScan(false);
+    setIsPinModalOpen(true);
   };
 
   const handleQuickRoleSelect = (role: string) => {
@@ -233,52 +223,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <span>SCAN QR CODE KARTU SISWA UNTUK LOGIN</span>
               </button>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Pilih Siswa Dari Daftar</label>
-                <select
-                  value={selectedSiswaId}
-                  onChange={(e) => {
-                    setSelectedSiswaId(e.target.value);
-                    const found = siswaList.find((s) => s.id === e.target.value);
-                    if (found) setNisnInput(found.nisn || found.nis);
-                  }}
-                  className="w-full px-3 py-2 text-xs font-bold border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white mb-3"
-                >
-                  <option value="">-- Pilih Nama Siswa --</option>
-                  {siswaList.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nama} - Kelas {s.kelas} (NISN: {s.nisn})
-                    </option>
-                  ))}
-                </select>
-
-                <label className="block text-xs font-bold text-slate-700 mb-1">Atau Ketik NISN / NIS Siswa</label>
-                <div className="relative">
-                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                  <input
-                    type="text"
-                    value={nisnInput}
-                    onChange={(e) => {
-                      setNisnInput(e.target.value);
-                      setSelectedSiswaId('');
-                    }}
-                    placeholder="Contoh: 0151234501 / NIS 2301"
-                    className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <p className="text-3xs text-slate-500 mt-1">
-                  Masuk sebagai akun siswa/orang tua untuk melihat saldo tabungan & buku tabungan digital secara mandiri.
-                </p>
+              <div className="flex items-center my-2 text-slate-400 font-bold text-3xs uppercase tracking-wider">
+                <div className="flex-1 border-t border-slate-200"></div>
+                <span className="px-2 bg-white text-slate-400">Atau Masuk Manual</span>
+                <div className="flex-1 border-t border-slate-200"></div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
-                Masuk ke Tabungan Siswa
+                <Lock className="w-4 h-4 text-amber-300" />
+                <span>Masuk Buku Tabungan Siswa</span>
               </button>
 
-
+              <p className="text-3xs text-center text-slate-500 font-medium">
+                Pilih nama siswa & verifikasi PIN Rahasia dalam 1 langkah cepat.
+              </p>
             </form>
           )}
         </div>
@@ -298,10 +259,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             );
           }
           if (found) {
-            handleLoginSiswaDirect(found);
+            setIsScannerOpen(false);
+            setSelectedSiswaForPin(found);
+            setFromQrScan(true);
+            setIsPinModalOpen(true);
           } else {
             setErrorMsg(`Siswa dengan NIS/NISN "${nisOrNisn}" tidak ditemukan!`);
           }
+        }}
+      />
+
+      <SiswaPinPromptModal
+        isOpen={isPinModalOpen}
+        onClose={() => setIsPinModalOpen(false)}
+        siswaList={siswaList}
+        initialSiswa={selectedSiswaForPin}
+        fromQrScan={fromQrScan}
+        onSuccess={(siswa) => {
+          setIsPinModalOpen(false);
+          handleLoginSiswaDirect(siswa);
         }}
       />
     </div>
