@@ -51,8 +51,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     e.preventDefault();
     setErrorMsg('');
 
+    const cleanUsername = username.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
     const foundUser = users.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase() && u.password === password
+      (u) =>
+        u.username.trim().toLowerCase() === cleanUsername &&
+        (u.password || '').trim() === cleanPassword
     );
 
     if (foundUser) {

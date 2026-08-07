@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, UserRole, Kelas } from '../types';
 import { StorageService } from '../services/storage';
-import { UserCog, Plus, Edit2, Trash2, ShieldCheck, X } from 'lucide-react';
+import { UserCog, Plus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff } from 'lucide-react';
 
 interface UserManagerProps {
   usersList: User[];
@@ -19,6 +19,11 @@ export const UserManager: React.FC<UserManagerProps> = ({ usersList, kelasList, 
   const [role, setRole] = useState<UserRole>('guru');
   const [kelas, setKelas] = useState(kelasList[0]?.nama_kelas || '1-A');
   const [status, setStatus] = useState<'Aktif' | 'Nonaktif'>('Aktif');
+  const [showPasswords, setShowPasswords] = useState<{ [key: string]: boolean }>({});
+
+  const toggleShowPassword = (id: string) => {
+    setShowPasswords((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const openAddModal = () => {
     setEditingUser(null);
@@ -103,6 +108,7 @@ export const UserManager: React.FC<UserManagerProps> = ({ usersList, kelasList, 
               <th className="p-3">ID</th>
               <th className="p-3">Username</th>
               <th className="p-3">Nama Lengkap</th>
+              <th className="p-3">Password</th>
               <th className="p-3">Role</th>
               <th className="p-3">Kelas (Khusus Guru)</th>
               <th className="p-3 text-center">Status</th>
@@ -115,6 +121,21 @@ export const UserManager: React.FC<UserManagerProps> = ({ usersList, kelasList, 
                 <td className="p-3 font-mono font-bold text-slate-500 text-2xs">{u.id}</td>
                 <td className="p-3 font-mono font-bold text-slate-800">{u.username}</td>
                 <td className="p-3 font-bold text-slate-900">{u.nama}</td>
+                <td className="p-3 font-mono text-slate-700">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold">
+                      {showPasswords[u.id] ? u.password || '(tanpa password)' : '••••••••'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleShowPassword(u.id)}
+                      className="p-1 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+                      title="Lihat Password"
+                    >
+                      {showPasswords[u.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </td>
                 <td className="p-3 font-bold uppercase text-slate-700">
                   {u.role === 'admin_bank' ? (
                     <span className="bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded-full text-3xs font-extrabold border border-cyan-200">

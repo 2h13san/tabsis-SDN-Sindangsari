@@ -36,9 +36,11 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const [hasTorch, setHasTorch] = useState(false);
   
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isClosedRef = useRef(!isOpen);
   const qrContainerId = 'qr-reader-viewport';
 
   useEffect(() => {
+    isClosedRef.current = !isOpen;
     if (!isOpen) {
       stopCameraScanner();
       return;
@@ -49,7 +51,9 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
     if (activeTab === 'camera') {
       const timer = setTimeout(() => {
-        startCameraScanner();
+        if (!isClosedRef.current) {
+          startCameraScanner();
+        }
       }, 200);
 
       return () => {
@@ -60,6 +64,13 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       stopCameraScanner();
     }
   }, [isOpen, activeTab, selectedCameraId]);
+
+  useEffect(() => {
+    return () => {
+      isClosedRef.current = true;
+      stopCameraScanner();
+    };
+  }, []);
 
   const refreshCameraList = async () => {
     try {
@@ -94,40 +105,65 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   };
 
   const stopCameraScanner = async () => {
+    isClosedRef.current = true;
+
     if (scannerRef.current) {
+      const instance = scannerRef.current;
+      scannerRef.current = null;
       try {
-        if (scannerRef.current.isScanning) {
-          await scannerRef.current.stop();
+        if (instance.isScanning) {
+          await instance.stop();
         }
-        scannerRef.current.clear();
+        instance.clear();
       } catch (e) {
-        console.error('Error stopping scanner:', e);
-      } finally {
-        scannerRef.current = null;
-        setIsScanning(false);
-        setIsCameraLoading(false);
-        setTorchOn(false);
-        setHasTorch(false);
+        console.warn('Error stopping html5Qrcode scanner:', e);
       }
-    } else {
-      setIsScanning(false);
-      setIsCameraLoading(false);
     }
+
+    // Explicitly release all MediaStream tracks on video elements in document to turn camera hardware off
+    try {
+      const containerEl = document.getElementById(qrContainerId);
+      if (containerEl) {
+        const videoEls = containerEl.getElementsByTagName('video');
+        for (let i = 0; i < videoEls.length; i++) {
+          const video = videoEls[i] as HTMLVideoElement;
+          if (video && video.srcObject) {
+            const stream = video.srcObject as MediaStream;
+            if (stream && stream.getTracks) {
+              stream.getTracks().forEach((track) => {
+                track.enabled = false;
+                track.stop();
+              });
+            }
+            video.srcObject = null;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error stopping video tracks:', e);
+    }
+
+    setIsScanning(false);
+    setIsCameraLoading(false);
+    setTorchOn(false);
+    setHasTorch(false);
   };
 
   const startCameraScanner = async () => {
+    if (isClosedRef.current || !isOpen) return;
+
     setCameraError(null);
     setIsCameraLoading(true);
     setIsScanning(false);
+
+    await stopCameraScanner();
+    isClosedRef.current = false;
+
     try {
       const containerEl = document.getElementById(qrContainerId);
-      if (!containerEl) {
+      if (!containerEl || isClosedRef.current) {
         setIsCameraLoading(false);
         return;
-      }
-
-      if (scannerRef.current) {
-        await stopCameraScanner();
       }
 
       // Support all standard 1D barcodes and 2D QR codes
@@ -180,6 +216,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       let lastStartError: any = null;
 
       for (const constraint of attemptsToTry) {
+        if (isClosedRef.current) break;
         try {
           await html5Qrcode.start(
             constraint,
@@ -195,6 +232,21 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           lastStartError = err;
           console.warn('Camera constraint failed, trying next:', constraint, err);
         }
+      }
+
+      // Check if modal was closed while starting
+      if (isClosedRef.current) {
+        if (started) {
+          try {
+            await html5Qrcode.stop();
+            html5Qrcode.clear();
+          } catch (e) {
+            // ignore
+          }
+        }
+        scannerRef.current = null;
+        stopCameraScanner();
+        return;
       }
 
       if (!started) {
@@ -217,6 +269,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         setHasTorch(false);
       }
     } catch (err: any) {
+      if (isClosedRef.current) return;
       console.warn('Camera scanner start error:', err);
       setIsCameraLoading(false);
       setIsScanning(false);
@@ -247,7 +300,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     setSelectedCameraId(cameras[nextIndex].id);
   };
 
-  const handleDecodedResult = (rawText: string) => {
+  const handleDecodedResult = async (rawText: string) => {
     let cleanText = rawText.trim();
     
     // Try to parse JSON if formatted as JSON
@@ -281,7 +334,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       }
     }
 
-    stopCameraScanner();
+    await stopCameraScanner();
     onScanSuccess({
       nisOrNisn: cleanText,
       raw: rawText,
